@@ -1,0 +1,16 @@
+- [ ] Browser capture server should not be coupled to fastapi
+- [ ] Some features that should be optional are part of the core
+- [ ] Users should be able to use both uv run and python -m for examples or other aspects which currently doesn't work
+- [ ] There needs to be some cleaner error propagation system
+  - [ ] Optional hooks for traceability like OTEL
+  - [ ] Auto recovery model for example retry to x times
+- [ ] Support pages which need to explicitly reuse page
+- [ ] Add helper functions for common termination conditions like pagination, infinite scroll etc.
+- [ ] Support MCP driven fetchers and extractors to for example support autonomous google search
+- [ ] Write clear docs readable from web browser
+  - `uv add --group docs mkdocs-material "mkdocstrings[python]"`
+  - mkdocs vs sphinx + autodoc
+- [ ] testing
+  - [ ] unit tests
+  - [ ] golden tests to detect regressions
+  - [ ] integration tests to test different request managers

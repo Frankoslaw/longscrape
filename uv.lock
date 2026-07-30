@@ -523,6 +523,7 @@ dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
     { name = "parsel" },
+    { name = "pydantic" },
 ]
 
 [package.optional-dependencies]
@@ -560,6 +561,7 @@ requires-dist = [
     { name = "playwright", marker = "extra == 'playwright'", specifier = ">=1.61.0" },
     { name = "playwright", marker = "extra == 'stealth'", specifier = ">=1.61.0" },
     { name = "playwright-stealth", marker = "extra == 'stealth'", specifier = ">=2.0.3" },
+    { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pymongo", marker = "extra == 'mongodb'", specifier = ">=4.17.0" },
 ]
 provides-extras = ["playwright", "patchright", "stealth", "mongodb"]

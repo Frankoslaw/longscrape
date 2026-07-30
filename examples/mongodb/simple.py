@@ -1,9 +1,3 @@
-"""Scrape country names once and retain the raw response in MongoDB.
-
-Start MongoDB with ``docker compose -f compose.dev.yml up -d``. Run this with
-``uv run --extra mongodb python examples/simple_mongodb.py``.
-"""
-
 import asyncio
 import os
 

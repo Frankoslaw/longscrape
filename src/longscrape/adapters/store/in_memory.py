@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator
+
 from longscrape.core.domain.pipeline import RawEntry
 
 
@@ -12,3 +14,8 @@ class InMemoryRawEntryStore:
 
     async def put(self, cache_key: str, raw_entry: RawEntry) -> None:
         self._entries[cache_key] = raw_entry
+
+    async def entries(self) -> AsyncIterator[RawEntry]:
+        # Snapshot values so a concurrent write cannot invalidate iteration.
+        for raw_entry in tuple(self._entries.values()):
+            yield raw_entry

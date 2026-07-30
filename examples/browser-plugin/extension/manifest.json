@@ -1,19 +1,19 @@
 {
   "manifest_version": 2,
-  "name": "Longscrape browser capture example",
+  "name": "Longscrape browser capture",
   "version": "0.1.0",
-  "description": "Sends the current LinkedIn page to a local Longscrape example receiver.",
+  "description": "Sends configured browser routes to a local Longscrape receiver.",
   "permissions": [
     "storage",
     "http://127.0.0.1:8765/*",
-    "https://www.linkedin.com/*"
+    "<all_urls>"
   ],
   "background": {
     "scripts": ["background.js"]
   },
   "content_scripts": [
     {
-      "matches": ["https://www.linkedin.com/*"],
+      "matches": ["<all_urls>"],
       "js": ["rules.js", "content.js"],
       "run_at": "document_idle"
     }

@@ -51,6 +51,10 @@ class RawEntry:
 
     id: UUID = field(default_factory=lambda: uuid.uuid4())
     fetched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # Preserve the input context with the source so it can be extracted again
+    # after being loaded from a raw-entry store.
+    kind: str = "default"
+    query: Any = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,11 @@ class RawInput:
         if "id" in overrides:
             raise ValueError("A spawned input always receives a new id")
         return replace(self, id=uuid.uuid4(), **overrides)
+
+    @classmethod
+    def from_raw_entry(cls, raw_entry: RawEntry) -> RawInput:
+        """Create an input that restores the context saved with an entry."""
+        return cls(raw_entry=raw_entry, kind=raw_entry.kind, query=raw_entry.query)
 
 
 type PipelineInput = FetchRequest | RawInput

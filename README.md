@@ -116,6 +116,25 @@ async with Crawler({"company-page": worker}) as crawler:
     companies = await crawler.run_inputs(input)
 ```
 
+`RawEntry` also stores its `kind` and `query`. This preserves extractor context
+in persistent raw-entry stores; call `RawInput.from_raw_entry(entry)` when
+replaying a stored entry.
+
+Use `ReExtractor` to replay every entry in a raw-entry store without fetching.
+Workers are unscoped by default; set `task_kind` to replay that worker only for
+entries of one kind. Scoped workers take precedence over an unscoped fallback.
+
+```python
+reextractor = ReExtractor(
+    raw_entries,
+    [
+        ReExtractWorker(ProductExtractor(), task_kind="product-page"),
+        ReExtractWorker(FallbackExtractor()),
+    ],
+)
+items = await reextractor.run()
+```
+
 ### `ScraperWorker`
 
 `ScraperWorker` composes one fetcher and one extractor. It optionally limits
@@ -168,25 +187,44 @@ uv run --extra patchright python examples/quotes.py
 
 ### HTTP scraper with MongoDB raw storage
 
-[examples/simple_mongodb.py](examples/simple_mongodb.py) fetches country names
+[examples/mongodb/simple.py](examples/mongodb/simple.py) fetches country names
 from ScrapethisSite. On the first run it saves the raw HTML to MongoDB; later
 runs with the same task use the stored HTML instead.
 
 ```bash
 docker compose -f compose.dev.yml up -d
-uv run --extra mongodb python examples/simple_mongodb.py
+uv run --extra mongodb python examples/mongodb/simple.py
 ```
 
 The included [compose.dev.yml](compose.dev.yml) exposes MongoDB at
 `mongodb://localhost:27017`. Set `MONGODB_URI` to use another deployment.
 
+[examples/mongodb/reextract.py](examples/mongodb/reextract.py) reprocesses all
+stored `countries` entries with `ReExtractor`. It does not create an HTTP client
+or fetch pages, so run it after the simple example has populated MongoDB.
+
+```bash
+uv run --extra mongodb python examples/mongodb/reextract.py
+```
+
 ### Browser-plugin raw input
 
 [examples/browser-plugin](examples/browser-plugin) contains a temporary Firefox
-extension and a local LinkedIn people-search/profile extractor. The extension
-sends rendered HTML to the example receiver, which creates `RawInput` values;
-the flow therefore has no fetcher. Use it only for pages and data you are
-authorised to process.
+extension and a local LinkedIn people-search/profile extractor. Its route JSON
+maps URL globs to Longscrape task kinds, so the same extension can capture other
+configured pages. `BrowserCaptureServer` registers workers by kind and exposes a
+`/captures` endpoint which turns each delivery into a `RawInput`; the flow
+therefore has no fetcher. Use it only for pages and data you are authorised to
+process.
+
+```python
+server = BrowserCaptureServer()
+server.register("product-page", ScraperWorker(None, ProductExtractor(), task_kind="product-page"))
+app = server.app  # run this ASGI app with Uvicorn
+```
+
+Pass `on_items` to `BrowserCaptureServer` to store, print, or otherwise consume
+the extracted entries after each capture.
 
 ## Queues and crawling
 

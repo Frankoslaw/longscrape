@@ -41,40 +41,34 @@ function setIndicatorStatus(status) {
   indicator.style.borderColor = INDICATOR_COLORS[status] || INDICATOR_COLORS.pending;
 }
 
-function capture() {
+async function capture() {
   captureTimer = undefined;
   clearTimeout(maxWaitTimer);
   maxWaitTimer = undefined;
 
   const url = window.location.href;
-  const parsedUrl = new URL(url);
-  const rule = matchingRule(url);
-  if (!rule) return;
+  const route = await matchingRoute(url);
+  if (!route) return;
 
   const query = {
-    ...(rule.query ? rule.query(parsedUrl) : {}),
-    ...pageFields(rule.kind),
+    ...(route.query && typeof route.query === "object" ? route.query : {}),
+    url,
+    page_title: document.title,
   };
   const payload = {
     type: "capture",
     url,
     query,
-    kind: rule.kind,
+    kind: route.kind,
   };
 
-  if (rule.browserCaptureOnly) {
-    const content = document.documentElement.outerHTML;
-    payload.content = content;
-    payload.content_type = "text/html";
+  const content = document.documentElement.outerHTML;
+  payload.content = content;
+  payload.content_type = "text/html";
 
-    const key = `${url}:${content.length}`;
-    if (key === lastPayloadKey) return;
-    lastPayloadKey = key;
-  } else {
-    const key = `${url}:${JSON.stringify(query)}`;
-    if (key === lastPayloadKey) return;
-    lastPayloadKey = key;
-  }
+  const key = `${route.kind}:${url}:${content.length}`;
+  if (key === lastPayloadKey) return;
+  lastPayloadKey = key;
 
   showActiveIndicator("pending");
   browser.runtime.sendMessage(payload).then((result) => {
@@ -83,27 +77,6 @@ function capture() {
     setIndicatorStatus("failure");
     console.warn("Failed to communicate with background script:", error);
   });
-}
-
-function pageFields(kind) {
-  const fields = { page_title: document.title };
-  if (kind !== "linkedin.profile") return fields;
-
-  const text = (selectors) => {
-    for (const selector of selectors) {
-      const value = document.querySelector(selector)?.textContent?.trim();
-      if (value) return value;
-    }
-    return "";
-  };
-  return {
-    ...fields,
-    profile_name: text(["main h1", "h1"]),
-    profile_headline: text([
-      "main .text-body-medium",
-      "main [data-generated-suggestion-target]",
-    ]),
-  };
 }
 
 function scheduleCapture() {
@@ -115,7 +88,9 @@ function scheduleCapture() {
   }
 }
 
-if (matchingRule(window.location.href)) showActiveIndicator("pending");
+matchingRoute(window.location.href).then((route) => {
+  if (route) showActiveIndicator("pending");
+});
 scheduleCapture();
 
 addEventListener("pageshow", scheduleCapture);

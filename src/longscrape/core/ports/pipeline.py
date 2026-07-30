@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from typing import Protocol
 from urllib.parse import urlparse
 
@@ -44,3 +45,5 @@ class RawEntryStore(Protocol):
     async def get(self, cache_key: str) -> RawEntry | None: ...
 
     async def put(self, cache_key: str, raw_entry: RawEntry) -> None: ...
+
+    def entries(self) -> AsyncIterator[RawEntry]: ...

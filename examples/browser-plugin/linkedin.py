@@ -10,32 +10,20 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urljoin
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from parsel import Selector
-from pydantic import BaseModel, Field
 
 from longscrape import (
-    Crawler,
+    BrowserCaptureServer,
     DefaultExtractor,
     ExtractionResult,
     PipelineInput,
     RawEntry,
-    RawInput,
     RichEntry,
     ScraperWorker,
 )
 
 SEARCH_KIND = "linkedin.people-search"
 PROFILE_KIND = "linkedin.profile"
-
-app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Local example receiver; do not use with credentials.
-    allow_methods=["POST"],
-    allow_headers=["Content-Type"],
-)
 
 
 def page_text(raw_entry: RawEntry) -> str:
@@ -144,42 +132,18 @@ class LinkedInProfileExtractor(DefaultExtractor[dict[str, str]]):
         )
 
 
-WORKERS = {
-    SEARCH_KIND: ScraperWorker(
-        None, LinkedInPeopleSearchExtractor(), task_kind=SEARCH_KIND
-    ),
-    PROFILE_KIND: ScraperWorker(
-        None, LinkedInProfileExtractor(), task_kind=PROFILE_KIND
-    ),
-}
-
-
-async def process_capture(input: RawInput) -> list[RichEntry[Any]]:
-    async with Crawler(WORKERS) as crawler:
-        return await crawler.run_inputs(input)
-
-
-class BrowserCapture(BaseModel):
-    kind: str
-    query: Any = Field(default_factory=dict)
-    url: str
-    content: str
-    content_type: str = "text/html"
-
-
-@app.post("/captures")
-async def capture(capture: BrowserCapture) -> dict[str, Any]:
-    items = await process_capture(
-        RawInput(
-            kind=capture.kind,
-            query=capture.query,
-            raw_entry=RawEntry(
-                url=capture.url,
-                content=capture.content,
-                content_type=capture.content_type,
-            ),
-        )
-    )
+async def print_items(items: list[RichEntry[Any]]) -> None:
     for item in items:
         print(json.dumps(item.data, ensure_ascii=False, default=str))
-    return {"status": "ok", "items": len(items)}
+
+
+capture_server = BrowserCaptureServer(on_items=print_items)
+capture_server.register(
+    SEARCH_KIND,
+    ScraperWorker(None, LinkedInPeopleSearchExtractor(), task_kind=SEARCH_KIND),
+)
+capture_server.register(
+    PROFILE_KIND,
+    ScraperWorker(None, LinkedInProfileExtractor(), task_kind=PROFILE_KIND),
+)
+app = capture_server.app

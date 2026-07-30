@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from longscrape.core.domain.pipeline import (
@@ -53,6 +54,7 @@ class RawEntryResolver:
             await self.rate_limiter.acquire(self.rate_limit_key)
         logger.debug("fetching request: id=%s", request.id)
         raw_entry = await self.fetcher.fetch(request)
+        raw_entry = replace(raw_entry, kind=request.kind, query=request.query)
         if self.raw_entry_store is not None and self.cache_policy.write:
             await self.raw_entry_store.put(cache_key, raw_entry)
         return raw_entry

@@ -23,7 +23,12 @@ from longscrape.core.ports.ratelimit import (
     LeakyBucketRateLimiter,
     RateLimiter,
 )
+from longscrape.core.services.browser_capture import (
+    BrowserCapture,
+    BrowserCaptureServer,
+)
 from longscrape.core.services.crawler import Crawler
+from longscrape.core.services.reextract import ReExtractor, ReExtractWorker
 from longscrape.core.services.worker import ScraperWorker
 from longscrape.logging import configure_logging
 
@@ -32,6 +37,8 @@ stdlib_logging.getLogger("longscrape").addHandler(stdlib_logging.NullHandler())
 Task = ScraperTask
 
 __all__ = [
+    "BrowserCapture",
+    "BrowserCaptureServer",
     "CachePolicy",
     "Crawler",
     "DefaultExtractor",
@@ -47,6 +54,8 @@ __all__ = [
     "RawEntry",
     "RawEntryStore",
     "RawInput",
+    "ReExtractWorker",
+    "ReExtractor",
     "RichEntry",
     "ScraperTask",
     "ScraperWorker",

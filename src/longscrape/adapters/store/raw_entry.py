@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator, Mapping
+from typing import Any
 from uuid import UUID
 
 from pymongo import AsyncMongoClient
@@ -39,6 +41,14 @@ class PyMongoRawEntryStore:
         document = await self._collection.find_one({"_id": task_hash})
         if document is None:
             return None
+        return self._raw_entry(document)
+
+    async def entries(self) -> AsyncIterator[RawEntry]:
+        async for document in self._collection.find({}):
+            yield self._raw_entry(document)
+
+    @staticmethod
+    def _raw_entry(document: Mapping[str, Any]) -> RawEntry:
         return RawEntry(
             id=UUID(document["id"]),
             url=document["url"],
@@ -46,6 +56,8 @@ class PyMongoRawEntryStore:
             content_type=document["content_type"],
             status_code=document["status_code"],
             fetched_at=document["fetched_at"],
+            kind=document.get("kind", "default"),
+            query=document.get("query"),
         )
 
     async def put(self, cache_key: str, raw_entry: RawEntry) -> None:
@@ -57,6 +69,8 @@ class PyMongoRawEntryStore:
             "content_type": raw_entry.content_type,
             "status_code": raw_entry.status_code,
             "fetched_at": raw_entry.fetched_at,
+            "kind": raw_entry.kind,
+            "query": raw_entry.query,
         }
         await self._collection.replace_one({"_id": cache_key}, document, upsert=True)
 
