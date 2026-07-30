@@ -11,7 +11,7 @@ from uuid import UUID
 
 @dataclass(frozen=True)
 class ScraperTask:
-    id: UUID = field(default_factory=lambda: uuid.uuid4())
+    id: UUID = field(default_factory=lambda: uuid.uuid4(), kw_only=True)
 
     kind: str = "default"
     query: Any = None

@@ -26,6 +26,15 @@ class PyMongoRawEntryStore:
             self._client = AsyncMongoClient(uri)
             self._collection = self._client[database][collection]
 
+    async def start(self) -> None:
+        """Match the lifecycle used by other crawler resources.
+
+        PyMongo connects lazily, so there is nothing to open here.
+        """
+
+    async def stop(self) -> None:
+        await self.close()
+
     async def get(self, task_hash: str) -> RawEntry | None:
         document = await self._collection.find_one({"_id": task_hash})
         if document is None:

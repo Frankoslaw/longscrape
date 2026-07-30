@@ -19,6 +19,7 @@ from longscrape.core.ports.ratelimit import (
     LeakyBucketRateLimiter,
     RateLimiter,
 )
+from longscrape.core.services.crawler import Crawler
 from longscrape.core.services.worker import ScraperWorker
 from longscrape.logging import configure_logging
 
@@ -27,6 +28,7 @@ stdlib_logging.getLogger("longscrape").addHandler(stdlib_logging.NullHandler())
 Task = ScraperTask
 
 __all__ = [
+    "Crawler",
     "DefaultExtractor",
     "DummyRateLimiter",
     "ExtractionResult",

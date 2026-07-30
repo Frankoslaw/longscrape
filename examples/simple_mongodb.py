@@ -10,6 +10,7 @@ import os
 from parsel import Selector
 
 from longscrape import (
+    Crawler,
     DefaultExtractor,
     ExtractionResult,
     RawEntry,
@@ -61,19 +62,19 @@ async def main() -> None:
     raw_entries = PyMongoRawEntryStore(
         os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
     )
-    await http.start()
-    try:
-        worker = ScraperWorker(
-            HttpFetcher(http),
-            CountryExtractor(),
-            raw_entry_store=raw_entries,
-        )
-        result = await worker.run(Task(kind="countries", query=URL))
-        for country in result.items[:5]:
+    async with Crawler(
+        {
+            "countries": ScraperWorker(
+                HttpFetcher(http),
+                CountryExtractor(),
+                raw_entry_store=raw_entries,
+            )
+        },
+        resources=[http, raw_entries],
+    ) as crawler:
+        countries = await crawler.run(Task(kind="countries", query=URL))
+        for country in countries[:5]:
             print(country.data)
-    finally:
-        await http.stop()
-        await raw_entries.close()
 
 
 if __name__ == "__main__":

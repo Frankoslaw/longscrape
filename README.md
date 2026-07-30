@@ -162,10 +162,24 @@ The included [compose.dev.yml](compose.dev.yml) exposes MongoDB at
 
 ## Queues and crawling
 
-`InMemoryTaskQueue` is an asynchronous FIFO queue. A basic crawler loop runs a
-task, stores all child tasks returned by its extractor, and processes them until
-the queue is empty. The quotes example contains a complete version of this
-pattern.
+`Crawler` runs the queue loop for you. Register one worker for each task kind,
+then stream items as they are extracted:
 
-For applications with multiple task kinds, create one worker per kind and use
-the task's `kind` to select the worker.
+```python
+async with Crawler(
+    {"country-page": worker},
+    resources=[http],
+    concurrency=4,
+) as crawler:
+    async for item in crawler.stream(Task(kind="country-page", query=URL)):
+        print(item.data)
+```
+
+It enqueues child tasks, routes them by `task.kind`, and stops once all work is
+complete. `await crawler.run(seed)` is the collecting alternative and returns a
+list of entries.
+
+Resources are never discovered from workers. Passing `resources=[http]` makes
+the context manager call their `start()` and `stop()` methods; use
+`manage_resources=False` when the caller owns a shared browser or client.
+`InMemoryTaskQueue` remains available when a custom queue is needed.

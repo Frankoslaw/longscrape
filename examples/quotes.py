@@ -1,25 +1,26 @@
 import asyncio
+import os
 from urllib.parse import urljoin
 
 from parsel.selector import Selector
 
 from longscrape import (
+    Crawler,
     DefaultExtractor,
     ExtractionResult,
-    InMemoryTaskQueue,
     LeakyBucketRateLimiter,
     RawEntry,
     RichEntry,
     ScraperWorker,
     Task,
-    TaskQueue,
 )
 from longscrape.adapters import (
     DefaultFetcher,
-    InMemoryRawEntryStore,
     PatchrightManager,
     URLBlocklist,
 )
+from longscrape.adapters.playwright.middlewares import URLCacher
+from longscrape.adapters.store.raw_entry import PyMongoRawEntryStore
 
 Quote = dict[str, str]
 Author = dict[str, str]
@@ -89,45 +90,39 @@ class AuthorExtractor(DefaultExtractor[Author]):
 async def main() -> None:
     playwright = PatchrightManager()
     playwright.register_middleware(URLBlocklist())
-    await playwright.start()
+    playwright.register_middleware(URLCacher())
 
-    try:
-        rate_limiter = LeakyBucketRateLimiter(requests_per_second=0.5)
-        raw_entries = InMemoryRawEntryStore()
-        workers = {
-            QUOTES_TASK_KIND: ScraperWorker(
-                DefaultFetcher(playwright, "quotes.toscrape.com"),
-                QuotesExtractor(),
-                task_kind=QUOTES_TASK_KIND,
-                rate_limiter=rate_limiter,
-                raw_entry_store=raw_entries,
-            ),
-            AUTHOR_TASK_KIND: ScraperWorker(
-                DefaultFetcher(playwright, "quotes.toscrape.com"),
-                AuthorExtractor(),
-                task_kind=AUTHOR_TASK_KIND,
-                rate_limiter=rate_limiter,
-                raw_entry_store=raw_entries,
-            ),
-        }
-        queue: TaskQueue = InMemoryTaskQueue()
-        await queue.put(Task(kind=QUOTES_TASK_KIND, query=START_URL))
+    fetcher = DefaultFetcher(playwright, "quotes.toscrape.com")
+    raw_entries = PyMongoRawEntryStore(
+        os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
+    )
+    rate_limiter = LeakyBucketRateLimiter(requests_per_second=0.5)
 
-        while not queue.empty():
-            task = await queue.get()
-            result = await workers[task.kind].run(task)
-            for child_task in result.tasks:
-                await queue.put(child_task)
-            for item in result.items:
-                if task.kind == QUOTES_TASK_KIND:
-                    print(
-                        f"[{item.url}] {item.data['author']}: "
-                        f"{item.data['quote'][:35]}..."
-                    )
-                else:
-                    print(f"[{item.url}] author: {item.data['name']}")
-    finally:
-        await playwright.stop()
+    workers = {
+        QUOTES_TASK_KIND: ScraperWorker(
+            fetcher,
+            QuotesExtractor(),
+            task_kind=QUOTES_TASK_KIND,
+            rate_limiter=rate_limiter,
+            raw_entry_store=raw_entries,
+        ),
+        AUTHOR_TASK_KIND: ScraperWorker(
+            fetcher,
+            AuthorExtractor(),
+            task_kind=AUTHOR_TASK_KIND,
+            rate_limiter=rate_limiter,
+            raw_entry_store=raw_entries,
+        ),
+    }
+
+    async with Crawler(workers, resources=[playwright, raw_entries]) as crawler:
+        async for item in crawler.stream(Task(kind=QUOTES_TASK_KIND, query=START_URL)):
+            if "quote" in item.data:
+                print(
+                    f"[{item.url}] {item.data['author']}: {item.data['quote'][:35]}..."
+                )
+            else:
+                print(f"[{item.url}] author: {item.data['name']}")
 
 
 if __name__ == "__main__":
