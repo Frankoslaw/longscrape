@@ -9,6 +9,7 @@ from longscrape import (
     ExtractionResult,
     FetchRequest,
     LeakyBucketRateLimiter,
+    PipelineInput,
     RawEntry,
     RichEntry,
     ScraperWorker,
@@ -33,9 +34,9 @@ class QuotesExtractor(DefaultExtractor[Quote]):
         super().__init__(allowed_domain="quotes.toscrape.com")
 
     async def extract(
-        self, request: FetchRequest, raw_entry: RawEntry
+        self, input: PipelineInput, raw_entry: RawEntry
     ) -> ExtractionResult[Quote]:
-        selector = Selector(text=raw_entry.content)
+        selector = Selector(text=raw_entry.text)
         items = [
             RichEntry(
                 url=raw_entry.url,
@@ -47,16 +48,14 @@ class QuotesExtractor(DefaultExtractor[Quote]):
             for quote in selector.css(".quote")
         ]
         tasks = [
-            request.spawn(
-                kind=AUTHOR_TASK_KIND, query=urljoin(raw_entry.url, about_href)
-            )
+            input.spawn(kind=AUTHOR_TASK_KIND, query=urljoin(raw_entry.url, about_href))
             for about_href in selector.css(
                 ".quote a[href*='/author/']::attr(href)"
             ).getall()
         ]
         if next_href := selector.css(".pager .next a::attr(href)").get():
             tasks.append(
-                request.spawn(
+                input.spawn(
                     kind=QUOTES_TASK_KIND, query=urljoin(raw_entry.url, next_href)
                 )
             )
@@ -68,9 +67,9 @@ class AuthorExtractor(DefaultExtractor[Author]):
         super().__init__(allowed_domain="quotes.toscrape.com")
 
     async def extract(
-        self, request: FetchRequest, raw_entry: RawEntry
+        self, input: PipelineInput, raw_entry: RawEntry
     ) -> ExtractionResult[Author]:
-        selector = Selector(text=raw_entry.content)
+        selector = Selector(text=raw_entry.text)
         return ExtractionResult(
             items=[
                 RichEntry(

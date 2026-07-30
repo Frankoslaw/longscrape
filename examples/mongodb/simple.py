@@ -8,6 +8,7 @@ from longscrape import (
     DefaultExtractor,
     ExtractionResult,
     FetchRequest,
+    PipelineInput,
     RawEntry,
     RichEntry,
     ScraperWorker,
@@ -22,9 +23,9 @@ class CountryExtractor(DefaultExtractor[str]):
         super().__init__(allowed_domain="www.scrapethissite.com")
 
     async def extract(
-        self, request: FetchRequest, raw_entry: RawEntry
+        self, input: PipelineInput, raw_entry: RawEntry
     ) -> ExtractionResult[str]:
-        selector = Selector(text=raw_entry.content)
+        selector = Selector(text=raw_entry.text)
         countries = [
             RichEntry(url=raw_entry.url, data=name.strip())
             for name in selector.css(".country-name::text").getall()

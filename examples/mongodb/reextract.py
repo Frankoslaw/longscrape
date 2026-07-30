@@ -22,7 +22,7 @@ class CountryExtractor(DefaultExtractor[str]):
     async def extract(
         self, input: PipelineInput, raw_entry: RawEntry
     ) -> ExtractionResult[str]:
-        selector = Selector(text=raw_entry.content)
+        selector = Selector(text=raw_entry.text)
         countries = [
             RichEntry(url=raw_entry.url, data=name.strip())
             for name in selector.css(".country-name::text").getall()

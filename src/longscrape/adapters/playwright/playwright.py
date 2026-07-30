@@ -36,8 +36,10 @@ class PlaywrightManager(PlaywrightManagerPort):
 
     # noinspection PyUnresolvedReferences
     async def start(self):
-        self._playwright = await self._create_playwright().start()
-        self._browser = await self._playwright.chromium.launch(headless=self.headless)
+        playwright = await self._create_playwright().start()
+        self._playwright = playwright
+        browser = await playwright.chromium.launch(headless=self.headless)
+        self._browser = browser
 
         context_options: Any = {"user_agent": USER_AGENT}
         if self.proxy:
@@ -45,7 +47,8 @@ class PlaywrightManager(PlaywrightManagerPort):
                 proxy=ProxySettings(server=self.proxy),
                 ignore_https_errors=True,
             )
-        self._context = await self._browser.new_context(**context_options)
+        context = await browser.new_context(**context_options)
+        self._context = context
 
         if self.middlewares:
 
@@ -55,7 +58,7 @@ class PlaywrightManager(PlaywrightManagerPort):
                         return
                 await route.continue_()
 
-            await self._context.route("**/*", pipeline_runner)
+            await context.route("**/*", pipeline_runner)
 
     async def stop(self):
         if self._context:
@@ -68,7 +71,8 @@ class PlaywrightManager(PlaywrightManagerPort):
     async def create_page(self) -> Page:
         if self._context is None:
             raise RuntimeError(
-                "Browser context is not initialized. Ensure the context is created before calling 'create_page()'."
+                "Browser context is not initialized. Ensure the context is created "
+                "before calling 'create_page()'."
             )
 
         page = await self._context.new_page()

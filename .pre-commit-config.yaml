@@ -16,9 +16,8 @@ repos:
 
   - repo: local
     hooks:
-      - id: pyre
-        name: pyre
-        entry: uv run pyre check
+      - id: pyright
+        name: pyright
+        entry: uv run --extra all pyright
         language: system
-        types: [ python ]
-        pass_filenames: false
+        types: [python]

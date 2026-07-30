@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -56,6 +57,13 @@ class RawEntry:
     kind: str = "default"
     query: Any = None
 
+    @property
+    def text(self) -> str:
+        """Return content as text, decoding byte responses as UTF-8."""
+        if isinstance(self.content, bytes):
+            return self.content.decode("utf-8", errors="replace")
+        return self.content
+
 
 @dataclass(frozen=True)
 class RawInput:
@@ -90,10 +98,10 @@ class RichEntry[T]:
 @dataclass(frozen=True)
 class ExtractionResult[T]:
     items: list[RichEntry[T]]
-    tasks: list[PipelineInput]
+    tasks: Sequence[PipelineInput]
 
     @property
-    def inputs(self) -> list[PipelineInput]:
+    def inputs(self) -> Sequence[PipelineInput]:
         return self.tasks
 
 

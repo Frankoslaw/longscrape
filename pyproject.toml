@@ -34,18 +34,29 @@ stealth = [
 mongodb = [
     "pymongo>=4.17.0",
 ]
+all = [
+    "longscrape[playwright,patchright,stealth,mongodb]",
+]
 
 [dependency-groups]
 dev = [
     "numpy>=2.5.1",
     "pandas>=3.0.5",
     "pre-commit>=4.6.1",
-    "pyre-check>=0.9.25",
+    "pyright>=1.1.411",
     "ruff>=0.16.0",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/longscrape"]
 
+[tool.pyright]
+typeCheckingMode = "basic"
+
 [tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+]
 extend-select = ["I"]

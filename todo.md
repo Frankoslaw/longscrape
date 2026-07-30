@@ -14,3 +14,7 @@
   - [ ] unit tests
   - [ ] golden tests to detect regressions
   - [ ] integration tests to test different request managers
+- [ ] Replace pyre with pyright
+- [ ] Implement built in deduping and utils
+- [ ] Implement optional generic rich entry store
+- [ ] Refine worker construction via builder pattern as rate_limiter, store or hooks are optional

@@ -20,7 +20,7 @@ class ExtractorPort[T](Protocol):
     def is_compatible(self, raw_entry: RawEntry) -> bool: ...
 
     async def extract(
-        self, task: PipelineInput, raw_entry: RawEntry
+        self, input: PipelineInput, raw_entry: RawEntry
     ) -> ExtractionResult[T]: ...
 
 
@@ -34,7 +34,7 @@ class DefaultExtractor[T]:
         return netloc == target or netloc.endswith(f".{target}")
 
     async def extract(
-        self, task: PipelineInput, raw_entry: RawEntry
+        self, input: PipelineInput, raw_entry: RawEntry
     ) -> ExtractionResult[T]:
         raise NotImplementedError(
             "Override extract() or implement ExtractorPort directly"
