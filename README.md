@@ -42,8 +42,10 @@ task = Task(kind="country-page", query="https://example.com/countries")
 ```
 
 Each task has a deterministic `task.hash`, calculated from `kind` and `query`.
-Raw-entry storage uses that hash as its lookup key. Use `task.spawn(...)` from
-an extractor to create a child task while changing only the required fields.
+Its `cache_key` defaults to that hash; pass `cache_key="..."` when two task
+shapes intentionally share a cached response. Raw-entry storage uses the cache
+key as its lookup key. Use `task.spawn(...)` from an extractor to create a
+child task while changing only the required fields.
 
 ### `Fetcher` and `RawEntry`
 
@@ -51,22 +53,7 @@ A fetcher implements `FetcherPort`. It receives a task, performs the network or
 browser work, and returns the unprocessed source as a `RawEntry`.
 
 ```python
-class HttpFetcher:
-    def __init__(self, http: HttpxManager) -> None:
-        self._http = http
-
-    def get_base_domain(self) -> str:
-        return "example.com"
-
-    async def fetch(self, task: Task) -> RawEntry:
-        response = await self._http.get(task.query)
-        return RawEntry(
-            task_hash=task.hash,
-            url=str(response.url),
-            content=response.text,
-            content_type=response.headers.get("content-type", "text/html"),
-            status_code=response.status_code,
-        )
+fetcher = HttpxFetcher(http, base_domain="example.com")
 ```
 
 `RawEntry` is the fetched document before parsing. It retains the final URL,
@@ -117,13 +104,19 @@ a worker should only accept a particular kind of task.
 
 ```python
 worker = ScraperWorker(
-    HttpFetcher(),
+    HttpxFetcher(http, base_domain="example.com"),
     CountryExtractor(),
     task_kind="country-page",
     raw_entry_store=InMemoryRawEntryStore(),
 )
 result = await worker.run(Task(kind="country-page", query="https://example.com"))
 ```
+
+`cache_policy` controls raw-entry reuse: `CachePolicy.use()` is the default,
+`CachePolicy.refresh()` replaces an existing entry, `CachePolicy.bypass()` does
+not read or write the store, and `CachePolicy.ttl(hours=24)` refetches stale
+entries. `rate_limit_key` optionally separates rate-limit grouping from the
+fetcher's base domain.
 
 ### Raw-entry stores
 
@@ -132,7 +125,8 @@ ideal for one program run, tests, and the browser example.
 
 `PyMongoRawEntryStore` persists raw entries in MongoDB. It has no automatic
 expiration: an entry remains until it is explicitly replaced or removed. The
-store is keyed by `task.hash`, so use stable, JSON-serializable task queries.
+store is keyed by `task.cache_key`, which defaults to `task.hash`; use stable,
+JSON-serializable task queries when relying on the default.
 
 ## Examples
 

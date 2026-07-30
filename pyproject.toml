@@ -35,6 +35,8 @@ mongodb = [
 
 [dependency-groups]
 dev = [
+    "numpy>=2.5.1",
+    "pandas>=3.0.5",
     "pre-commit>=4.6.1",
     "pyre-check>=0.9.25",
     "ruff>=0.16.0",

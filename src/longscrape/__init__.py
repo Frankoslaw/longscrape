@@ -1,6 +1,7 @@
 import logging as stdlib_logging
 
 from longscrape.core.domain.pipeline import (
+    CachePolicy,
     ExtractionResult,
     RawEntry,
     RichEntry,
@@ -28,6 +29,7 @@ stdlib_logging.getLogger("longscrape").addHandler(stdlib_logging.NullHandler())
 Task = ScraperTask
 
 __all__ = [
+    "CachePolicy",
     "Crawler",
     "DefaultExtractor",
     "DummyRateLimiter",

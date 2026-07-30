@@ -18,30 +18,9 @@ from longscrape import (
     ScraperWorker,
     Task,
 )
-from longscrape.adapters import HttpxManager, PyMongoRawEntryStore
+from longscrape.adapters import HttpxFetcher, HttpxManager, PyMongoRawEntryStore
 
 URL = "https://www.scrapethissite.com/pages/simple/"
-
-
-class HttpFetcher:
-    def __init__(self, http: HttpxManager) -> None:
-        self._http = http
-
-    def get_base_domain(self) -> str:
-        return "www.scrapethissite.com"
-
-    async def fetch(self, task: Task) -> RawEntry:
-        if not isinstance(task.query, str):
-            raise TypeError("HttpFetcher requires a URL string query")
-        response = await self._http.get(task.query)
-        response.raise_for_status()
-        return RawEntry(
-            task_hash=task.hash,
-            url=str(response.url),
-            content=response.text,
-            content_type=response.headers.get("content-type", "text/html"),
-            status_code=response.status_code,
-        )
 
 
 class CountryExtractor(DefaultExtractor[str]):
@@ -65,7 +44,7 @@ async def main() -> None:
     async with Crawler(
         {
             "countries": ScraperWorker(
-                HttpFetcher(http),
+                HttpxFetcher(http, base_domain="www.scrapethissite.com"),
                 CountryExtractor(),
                 raw_entry_store=raw_entries,
             )

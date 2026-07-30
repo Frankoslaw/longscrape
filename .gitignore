@@ -631,7 +631,8 @@ MigrationBackup/
 # End of https://www.toptal.com/developers/gitignore/api/python,venv,dotenv,vs,pycharm+all
 
 data
-playbooks
+*/**/.cache
+
+# playbooks # TODO: Remove in the future as playbooks are simply used for more complex testing and are not part of eighter src or documentation
 scripts
-.cache
 examples/private
