@@ -1,0 +1,80 @@
+"""Scrape country names once and retain the raw response in MongoDB.
+
+Start MongoDB with ``docker compose -f compose.dev.yml up -d``. Run this with
+``uv run --extra mongodb python examples/simple_mongodb.py``.
+"""
+
+import asyncio
+import os
+
+from parsel import Selector
+
+from longscrape import (
+    DefaultExtractor,
+    ExtractionResult,
+    RawEntry,
+    RichEntry,
+    ScraperWorker,
+    Task,
+)
+from longscrape.adapters import HttpxManager, PyMongoRawEntryStore
+
+URL = "https://www.scrapethissite.com/pages/simple/"
+
+
+class HttpFetcher:
+    def __init__(self, http: HttpxManager) -> None:
+        self._http = http
+
+    def get_base_domain(self) -> str:
+        return "www.scrapethissite.com"
+
+    async def fetch(self, task: Task) -> RawEntry:
+        if not isinstance(task.query, str):
+            raise TypeError("HttpFetcher requires a URL string query")
+        response = await self._http.get(task.query)
+        response.raise_for_status()
+        return RawEntry(
+            task_hash=task.hash,
+            url=str(response.url),
+            content=response.text,
+            content_type=response.headers.get("content-type", "text/html"),
+            status_code=response.status_code,
+        )
+
+
+class CountryExtractor(DefaultExtractor[str]):
+    def __init__(self) -> None:
+        super().__init__(allowed_domain="www.scrapethissite.com")
+
+    async def extract(self, task: Task, raw_entry: RawEntry) -> ExtractionResult[str]:
+        selector = Selector(text=raw_entry.content)
+        countries = [
+            RichEntry(url=raw_entry.url, data=name.strip())
+            for name in selector.css(".country-name::text").getall()
+        ]
+        return ExtractionResult(items=countries, tasks=[])
+
+
+async def main() -> None:
+    http = HttpxManager()
+    raw_entries = PyMongoRawEntryStore(
+        os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
+    )
+    await http.start()
+    try:
+        worker = ScraperWorker(
+            HttpFetcher(http),
+            CountryExtractor(),
+            raw_entry_store=raw_entries,
+        )
+        result = await worker.run(Task(kind="countries", query=URL))
+        for country in result.items[:5]:
+            print(country.data)
+    finally:
+        await http.stop()
+        await raw_entries.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -1,5 +1,5 @@
-from longscrape.core.doamin.pipeline import ExtractionResult, ScraperTask
-from longscrape.core.ports.pipeline import ExtractorPort, FetcherPort
+from longscrape.core.domain.pipeline import ExtractionResult, ScraperTask
+from longscrape.core.ports.pipeline import ExtractorPort, FetcherPort, RawEntryStore
 from longscrape.core.ports.ratelimit import RateLimiter
 from longscrape.logging import get_logger
 
@@ -14,6 +14,7 @@ class ScraperWorker[T]:
         *,
         task_kind: str | None = None,
         rate_limiter: RateLimiter | None = None,
+        raw_entry_store: RawEntryStore | None = None,
     ):
         self.fetcher = fetcher
         self.extractor = extractor
@@ -22,6 +23,7 @@ class ScraperWorker[T]:
             raise ValueError("base_domain must not be empty")
         self.task_kind = task_kind
         self.rate_limiter = rate_limiter
+        self.raw_entry_store = raw_entry_store
 
     def is_compatible(self, task: ScraperTask) -> bool:
         return self.task_kind is None or task.kind == self.task_kind
@@ -32,14 +34,29 @@ class ScraperWorker[T]:
             raise ValueError(f"Worker incompatible with task: {task.kind}")
 
         logger.info("task started: id=%s kind=%s", task.id, task.kind)
-        try:
-            if self.rate_limiter is not None:
-                await self.rate_limiter.acquire(self.base_domain)
-            logger.debug("fetching task: id=%s", task.id)
-            raw_entry = await self.fetcher.fetch(task)
-        except Exception:
-            logger.exception("fetch failed: id=%s kind=%s", task.id, task.kind)
-            raise
+        raw_entry = None
+        if self.raw_entry_store is not None:
+            try:
+                raw_entry = await self.raw_entry_store.get(task.hash)
+            except Exception:
+                logger.exception(
+                    "raw entry lookup failed: id=%s kind=%s", task.id, task.kind
+                )
+                raise
+
+        if raw_entry is None:
+            try:
+                if self.rate_limiter is not None:
+                    await self.rate_limiter.acquire(self.base_domain)
+                logger.debug("fetching task: id=%s", task.id)
+                raw_entry = await self.fetcher.fetch(task)
+                if self.raw_entry_store is not None:
+                    await self.raw_entry_store.put(task.hash, raw_entry)
+            except Exception:
+                logger.exception("fetch failed: id=%s kind=%s", task.id, task.kind)
+                raise
+        else:
+            logger.info("raw entry cache hit: id=%s kind=%s", task.id, task.kind)
 
         logger.info(
             "fetch complete: id=%s status=%s url=%s",

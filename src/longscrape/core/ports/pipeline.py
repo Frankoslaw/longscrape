@@ -1,7 +1,7 @@
 from typing import Protocol
 from urllib.parse import urlparse
 
-from longscrape.core.doamin.pipeline import (
+from longscrape.core.domain.pipeline import (
     ExtractionResult,
     RawEntry,
     ScraperTask,
@@ -37,3 +37,9 @@ class DefaultExtractor[T]:
         raise NotImplementedError(
             "Override extract() or implement ExtractorPort directly"
         )
+
+
+class RawEntryStore(Protocol):
+    async def get(self, task_hash: str) -> RawEntry | None: ...
+
+    async def put(self, task_hash: str, raw_entry: RawEntry) -> None: ...

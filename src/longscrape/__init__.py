@@ -1,13 +1,18 @@
 import logging as stdlib_logging
 
-from longscrape.core.doamin.pipeline import (
+from longscrape.core.domain.pipeline import (
     ExtractionResult,
     RawEntry,
     RichEntry,
     ScraperTask,
 )
-from longscrape.core.doamin.queue import InMemoryTaskQueue
-from longscrape.core.ports.pipeline import DefaultExtractor, ExtractorPort, FetcherPort
+from longscrape.core.domain.queue import InMemoryTaskQueue
+from longscrape.core.ports.pipeline import (
+    DefaultExtractor,
+    ExtractorPort,
+    FetcherPort,
+    RawEntryStore,
+)
 from longscrape.core.ports.queue import TaskQueue
 from longscrape.core.ports.ratelimit import (
     DummyRateLimiter,
@@ -31,6 +36,7 @@ __all__ = [
     "LeakyBucketRateLimiter",
     "RateLimiter",
     "RawEntry",
+    "RawEntryStore",
     "RichEntry",
     "ScraperTask",
     "ScraperWorker",

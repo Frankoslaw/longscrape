@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from longscrape.core.doamin.pipeline import ScraperTask
+from longscrape.core.domain.pipeline import ScraperTask
 
 
 class TaskQueue(Protocol):

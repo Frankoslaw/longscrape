@@ -15,10 +15,10 @@ from longscrape import (
     TaskQueue,
 )
 from longscrape.adapters import (
+    DefaultFetcher,
+    InMemoryRawEntryStore,
     PatchrightManager,
-    PlaywrightManagerPort,
     URLBlocklist,
-    URLCacher,
 )
 
 Quote = dict[str, str]
@@ -26,50 +26,6 @@ Author = dict[str, str]
 QUOTES_TASK_KIND = "quotes-page"
 AUTHOR_TASK_KIND = "author-page"
 START_URL = "https://quotes.toscrape.com/page/1/"
-
-
-class QuotesFetcher:
-    def __init__(self, playwright: PlaywrightManagerPort):
-        self._playwright = playwright
-
-    def get_base_domain(self) -> str:
-        return "quotes.toscrape.com"
-
-    async def fetch(self, task: Task) -> RawEntry:
-        if not isinstance(task.query, str):
-            raise TypeError("QuotesFetcher requires a URL string query")
-        page = await self._playwright.create_page()
-        try:
-            response = await page.goto(task.query)
-            return RawEntry(
-                url=page.url,
-                content=await page.content(),
-                status_code=response.status if response else 200,
-            )
-        finally:
-            await page.close()
-
-
-class AuthorFetcher:
-    def __init__(self, playwright: PlaywrightManagerPort):
-        self._playwright = playwright
-
-    def get_base_domain(self) -> str:
-        return "quotes.toscrape.com"
-
-    async def fetch(self, task: Task) -> RawEntry:
-        if not isinstance(task.query, str):
-            raise TypeError("AuthorFetcher requires a URL string query")
-        page = await self._playwright.create_page()
-        try:
-            response = await page.goto(task.query)
-            return RawEntry(
-                url=page.url,
-                content=await page.content(),
-                status_code=response.status if response else 200,
-            )
-        finally:
-            await page.close()
 
 
 class QuotesExtractor(DefaultExtractor[Quote]):
@@ -132,24 +88,26 @@ class AuthorExtractor(DefaultExtractor[Author]):
 
 async def main() -> None:
     playwright = PatchrightManager()
-    playwright.register_middleware(URLCacher())
     playwright.register_middleware(URLBlocklist())
     await playwright.start()
 
     try:
         rate_limiter = LeakyBucketRateLimiter(requests_per_second=0.5)
+        raw_entries = InMemoryRawEntryStore()
         workers = {
             QUOTES_TASK_KIND: ScraperWorker(
-                QuotesFetcher(playwright),
+                DefaultFetcher(playwright, "quotes.toscrape.com"),
                 QuotesExtractor(),
                 task_kind=QUOTES_TASK_KIND,
                 rate_limiter=rate_limiter,
+                raw_entry_store=raw_entries,
             ),
             AUTHOR_TASK_KIND: ScraperWorker(
-                AuthorFetcher(playwright),
+                DefaultFetcher(playwright, "quotes.toscrape.com"),
                 AuthorExtractor(),
                 task_kind=AUTHOR_TASK_KIND,
                 rate_limiter=rate_limiter,
+                raw_entry_store=raw_entries,
             ),
         }
         queue: TaskQueue = InMemoryTaskQueue()

@@ -1,7 +1,7 @@
 import asyncio
 from collections import deque
 
-from longscrape.core.doamin.pipeline import ScraperTask
+from longscrape.core.domain.pipeline import ScraperTask
 
 
 class InMemoryTaskQueue:

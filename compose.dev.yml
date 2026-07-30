@@ -1,0 +1,18 @@
+services:
+  mongodb:
+    image: mongo:8.0.4
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: longscrape
+      GLIBC_TUNABLES: glibc.pthread.rseq=1
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mongodb-data:

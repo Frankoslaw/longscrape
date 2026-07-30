@@ -7,18 +7,30 @@ name = "longscrape"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 license = { text = "Big Time Public License" }
 authors = [
     { name = "Franciszek Łopuszański", email = "franopusz2006@gmail.com" }
 ]
 dependencies = [
-    "asyncio>=4.0.0",
     "httpx>=0.28.1",
     "parsel>=1.11.0",
+]
+
+[project.optional-dependencies]
+playwright = [
+    "playwright>=1.61.0",
+]
+patchright = [
     "patchright>=1.61.2",
     "playwright>=1.61.0",
+]
+stealth = [
+    "playwright>=1.61.0",
     "playwright-stealth>=2.0.3",
+]
+mongodb = [
+    "pymongo>=4.17.0",
 ]
 
 [dependency-groups]

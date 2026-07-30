@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import hashlib
 import json
 import uuid
@@ -35,6 +37,9 @@ class RawEntry:
     content: str
     content_type: str = "text/html"
     status_code: int = 200
+
+    id: UUID = field(default_factory=lambda: uuid.uuid4())
+    task_hash: str | None = None
 
     fetched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
