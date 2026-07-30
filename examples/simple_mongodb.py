@@ -13,10 +13,10 @@ from longscrape import (
     Crawler,
     DefaultExtractor,
     ExtractionResult,
+    FetchRequest,
     RawEntry,
     RichEntry,
     ScraperWorker,
-    Task,
 )
 from longscrape.adapters import HttpxFetcher, HttpxManager, PyMongoRawEntryStore
 
@@ -27,7 +27,9 @@ class CountryExtractor(DefaultExtractor[str]):
     def __init__(self) -> None:
         super().__init__(allowed_domain="www.scrapethissite.com")
 
-    async def extract(self, task: Task, raw_entry: RawEntry) -> ExtractionResult[str]:
+    async def extract(
+        self, request: FetchRequest, raw_entry: RawEntry
+    ) -> ExtractionResult[str]:
         selector = Selector(text=raw_entry.content)
         countries = [
             RichEntry(url=raw_entry.url, data=name.strip())
@@ -51,7 +53,7 @@ async def main() -> None:
         },
         resources=[http, raw_entries],
     ) as crawler:
-        countries = await crawler.run(Task(kind="countries", query=URL))
+        countries = await crawler.run_inputs(FetchRequest(kind="countries", query=URL))
         for country in countries[:5]:
             print(country.data)
 

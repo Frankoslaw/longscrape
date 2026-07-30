@@ -7,11 +7,11 @@ from longscrape import (
     Crawler,
     DefaultExtractor,
     ExtractionResult,
+    FetchRequest,
     LeakyBucketRateLimiter,
     RawEntry,
     RichEntry,
     ScraperWorker,
-    Task,
 )
 from longscrape.adapters import (
     DefaultFetcher,
@@ -32,7 +32,9 @@ class QuotesExtractor(DefaultExtractor[Quote]):
     def __init__(self):
         super().__init__(allowed_domain="quotes.toscrape.com")
 
-    async def extract(self, task: Task, raw_entry: RawEntry) -> ExtractionResult[Quote]:
+    async def extract(
+        self, request: FetchRequest, raw_entry: RawEntry
+    ) -> ExtractionResult[Quote]:
         selector = Selector(text=raw_entry.content)
         items = [
             RichEntry(
@@ -45,14 +47,16 @@ class QuotesExtractor(DefaultExtractor[Quote]):
             for quote in selector.css(".quote")
         ]
         tasks = [
-            task.spawn(kind=AUTHOR_TASK_KIND, query=urljoin(raw_entry.url, about_href))
+            request.spawn(
+                kind=AUTHOR_TASK_KIND, query=urljoin(raw_entry.url, about_href)
+            )
             for about_href in selector.css(
                 ".quote a[href*='/author/']::attr(href)"
             ).getall()
         ]
         if next_href := selector.css(".pager .next a::attr(href)").get():
             tasks.append(
-                task.spawn(
+                request.spawn(
                     kind=QUOTES_TASK_KIND, query=urljoin(raw_entry.url, next_href)
                 )
             )
@@ -64,7 +68,7 @@ class AuthorExtractor(DefaultExtractor[Author]):
         super().__init__(allowed_domain="quotes.toscrape.com")
 
     async def extract(
-        self, task: Task, raw_entry: RawEntry
+        self, request: FetchRequest, raw_entry: RawEntry
     ) -> ExtractionResult[Author]:
         selector = Selector(text=raw_entry.content)
         return ExtractionResult(
@@ -113,7 +117,9 @@ async def main() -> None:
     }
 
     async with Crawler(workers, resources=[playwright]) as crawler:
-        async for item in crawler.stream(Task(kind=QUOTES_TASK_KIND, query=START_URL)):
+        async for item in crawler.stream_inputs(
+            FetchRequest(kind=QUOTES_TASK_KIND, query=START_URL)
+        ):
             if "quote" in item.data:
                 print(
                     f"[{item.url}] {item.data['author']}: {item.data['quote'][:35]}..."
