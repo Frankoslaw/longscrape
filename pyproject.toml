@@ -51,6 +51,8 @@ dev = [
 packages = ["src/longscrape"]
 
 [tool.pyright]
+venvPath = "."
+venv = ".venv"
 typeCheckingMode = "basic"
 
 [tool.ruff.lint]

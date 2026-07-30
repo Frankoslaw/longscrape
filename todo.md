@@ -14,7 +14,17 @@
   - [ ] unit tests
   - [ ] golden tests to detect regressions
   - [ ] integration tests to test different request managers
-- [ ] Replace pyre with pyright
+- [x] Replace pyre with pyright
 - [ ] Implement built in deduping and utils
 - [ ] Implement optional generic rich entry store
 - [ ] Refine worker construction via builder pattern as rate_limiter, store or hooks are optional
+- [ ] Detect status codes like 429, 503 as special cases for rate limiter:
+  - [ ] reduce frequency on service down 503
+  - [ ] exponential backoff on to many requests 429
+- [ ] More repository backends
+  - [ ] redis
+  - [ ] sqlite
+- [ ] redis backed task queue and rate limiting
+- [ ] add centralized config and support for dotenv for data store connections or things like proxy and headless
+- [ ] structured configurable logging to terminal and file
+- [ ] separate sync and async api like playwright
