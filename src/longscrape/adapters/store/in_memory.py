@@ -7,8 +7,8 @@ class InMemoryRawEntryStore:
     def __init__(self) -> None:
         self._entries: dict[str, RawEntry] = {}
 
-    async def get(self, task_hash: str) -> RawEntry | None:
-        return self._entries.get(task_hash)
+    async def get(self, cache_key: str) -> RawEntry | None:
+        return self._entries.get(cache_key)
 
-    async def put(self, task_hash: str, raw_entry: RawEntry) -> None:
-        self._entries[task_hash] = raw_entry
+    async def put(self, cache_key: str, raw_entry: RawEntry) -> None:
+        self._entries[cache_key] = raw_entry

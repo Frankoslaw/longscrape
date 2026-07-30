@@ -3,22 +3,23 @@ from urllib.parse import urlparse
 
 from longscrape.core.domain.pipeline import (
     ExtractionResult,
+    FetchRequest,
+    PipelineInput,
     RawEntry,
-    ScraperTask,
 )
 
 
 class FetcherPort(Protocol):
     def get_base_domain(self) -> str: ...
 
-    async def fetch(self, task: ScraperTask) -> RawEntry: ...
+    async def fetch(self, task: FetchRequest) -> RawEntry: ...
 
 
 class ExtractorPort[T](Protocol):
     def is_compatible(self, raw_entry: RawEntry) -> bool: ...
 
     async def extract(
-        self, task: ScraperTask, raw_entry: RawEntry
+        self, task: PipelineInput, raw_entry: RawEntry
     ) -> ExtractionResult[T]: ...
 
 
@@ -32,7 +33,7 @@ class DefaultExtractor[T]:
         return netloc == target or netloc.endswith(f".{target}")
 
     async def extract(
-        self, task: ScraperTask, raw_entry: RawEntry
+        self, task: PipelineInput, raw_entry: RawEntry
     ) -> ExtractionResult[T]:
         raise NotImplementedError(
             "Override extract() or implement ExtractorPort directly"
@@ -40,6 +41,6 @@ class DefaultExtractor[T]:
 
 
 class RawEntryStore(Protocol):
-    async def get(self, task_hash: str) -> RawEntry | None: ...
+    async def get(self, cache_key: str) -> RawEntry | None: ...
 
-    async def put(self, task_hash: str, raw_entry: RawEntry) -> None: ...
+    async def put(self, cache_key: str, raw_entry: RawEntry) -> None: ...

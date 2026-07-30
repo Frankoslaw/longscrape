@@ -19,7 +19,6 @@ class DefaultFetcher:
         try:
             response = await page.goto(task.query)
             return RawEntry(
-                task_hash=task.hash,
                 url=page.url,
                 content=await page.content(),
                 status_code=response.status if response else 200,

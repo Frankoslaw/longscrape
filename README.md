@@ -11,7 +11,8 @@
 `longscrape` is an asynchronous scraping toolkit built around a small pipeline:
 
 ```text
-Task → Fetcher → RawEntry → Extractor → RichEntry + child Tasks
+FetchRequest → Fetcher → RawEntry → Extractor → RichEntry + child inputs
+RawInput ───────────────────→ Extractor
 ```
 
 You provide the site-specific fetching and extraction logic. The library runs
@@ -49,11 +50,11 @@ and its `query` contains the fetcher input—usually a URL.
 task = Task(kind="country-page", query="https://example.com/countries")
 ```
 
-Each task has a deterministic `task.hash`, calculated from `kind` and `query`.
-Its `cache_key` defaults to that hash; pass `cache_key="..."` when two task
-shapes intentionally share a cached response. Raw-entry storage uses the cache
-key as its lookup key. Use `task.spawn(...)` from an extractor to create a
-child task while changing only the required fields.
+`Task` remains an alias for `FetchRequest`. Its `query` can be any
+JSON-serializable shape, such as a URL string or `{"city": "Warsaw",
+"country": "PL"}`. A deterministic request fingerprint is calculated from
+`kind` and `query`; callers do not supply cache keys. Put every
+request-affecting setting in the query so it contributes to the fingerprint.
 
 ### `Fetcher` and `RawEntry`
 
@@ -64,8 +65,8 @@ browser work, and returns the unprocessed source as a `RawEntry`.
 fetcher = HttpxFetcher(http, base_domain="example.com")
 ```
 
-`RawEntry` is the fetched document before parsing. It retains the final URL,
-body, content type, status code, and fetch time. Caching raw entries is useful
+`RawEntry` is the fetched document before parsing. Its body is `str | bytes`;
+it retains the final URL, content type, status code, and fetch time. Caching raw entries is useful
 because extraction can be changed and rerun without fetching the page again.
 
 For browser scraping, use the optional `DefaultFetcher` together with a
@@ -98,6 +99,23 @@ value, such as a dictionary, dataclass, or string. `ExtractionResult.items`
 contains the extracted records; `ExtractionResult.tasks` contains discovered
 follow-up work.
 
+### `RawInput` and `ScraperWorker`
+
+`RawInput` sends an already acquired entry straight to an extractor. It has the
+same `kind` and flexible `query` fields as `FetchRequest`, so an extractor gets
+the same context from browser-plugin and fetched inputs.
+
+```python
+input = RawInput(
+    kind="company-page",
+    query={"company_id": "acme-123"},
+    raw_entry=RawEntry(url=plugin_page.url, content=plugin_page.html),
+)
+worker = ScraperWorker(None, CompanyExtractor(), task_kind="company-page")
+async with Crawler({"company-page": worker}) as crawler:
+    companies = await crawler.run_inputs(input)
+```
+
 ### `ScraperWorker`
 
 `ScraperWorker` composes one fetcher and one extractor. It optionally limits
@@ -120,7 +138,7 @@ worker = ScraperWorker(
 result = await worker.run(Task(kind="country-page", query="https://example.com"))
 ```
 
-`cache_policy` controls raw-entry reuse: `CachePolicy.use()` is the default,
+`cache_policy` controls raw-entry reuse for `FetchRequest`s: `CachePolicy.use()` is the default,
 `CachePolicy.refresh()` replaces an existing entry, `CachePolicy.bypass()` does
 not read or write the store, and `CachePolicy.ttl(hours=24)` refetches stale
 entries. `rate_limit_key` optionally separates rate-limit grouping from the
@@ -133,8 +151,8 @@ ideal for one program run, tests, and the browser example.
 
 `PyMongoRawEntryStore` persists raw entries in MongoDB. It has no automatic
 expiration: an entry remains until it is explicitly replaced or removed. The
-store is keyed by `task.cache_key`, which defaults to `task.hash`; use stable,
-JSON-serializable task queries when relying on the default.
+store is keyed by the request fingerprint; use JSON-serializable queries when
+relying on the default.
 
 ## Examples
 
@@ -162,6 +180,14 @@ uv run --extra mongodb python examples/simple_mongodb.py
 The included [compose.dev.yml](compose.dev.yml) exposes MongoDB at
 `mongodb://localhost:27017`. Set `MONGODB_URI` to use another deployment.
 
+### Browser-plugin raw input
+
+[examples/browser-plugin](examples/browser-plugin) contains a temporary Firefox
+extension and a local LinkedIn people-search/profile extractor. The extension
+sends rendered HTML to the example receiver, which creates `RawInput` values;
+the flow therefore has no fetcher. Use it only for pages and data you are
+authorised to process.
+
 ## Queues and crawling
 
 `Crawler` runs the queue loop for you. Register one worker for each task kind,
@@ -177,9 +203,10 @@ async with Crawler(
         print(item.data)
 ```
 
-It enqueues child tasks, routes them by `task.kind`, and stops once all work is
-complete. `await crawler.run(seed)` is the collecting alternative and returns a
-list of entries.
+It enqueues child inputs, routes them by `input.kind`, and stops once all work
+is complete. `await crawler.run(seed)` is the collecting alternative. The
+equivalent `stream_inputs(...)` and `run_inputs(...)` names make it explicit
+that both `FetchRequest` and `RawInput` are accepted.
 
 Resources are never discovered from workers. Passing `resources=[http]` makes
 the context manager call their `start()` and `stop()` methods; use

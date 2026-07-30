@@ -28,7 +28,6 @@ class HttpxFetcher:
         if self._raise_for_status:
             response.raise_for_status()
         return RawEntry(
-            task_hash=task.hash,
             url=str(response.url),
             content=response.text,
             content_type=response.headers.get("content-type", "text/html"),

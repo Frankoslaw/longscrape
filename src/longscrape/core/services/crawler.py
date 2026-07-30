@@ -2,7 +2,12 @@ import asyncio
 from collections.abc import AsyncIterator, Iterable, Mapping, Sequence
 from typing import Any, Protocol, Self
 
-from longscrape.core.domain.pipeline import RichEntry, ScraperTask
+from longscrape.core.domain.pipeline import (
+    FetchRequest,
+    PipelineInput,
+    RawInput,
+    RichEntry,
+)
 from longscrape.core.domain.queue import InMemoryTaskQueue
 from longscrape.core.ports.queue import TaskQueue
 from longscrape.core.services.worker import ScraperWorker
@@ -15,14 +20,6 @@ class LifecycleResource(Protocol):
 
 
 class Crawler:
-    """Run tasks through workers and yield the entries they extract.
-
-    Resources are only started and stopped when they are explicitly passed to
-    ``resources`` and the crawler is used as an async context manager. This
-    lets callers share clients or browser managers by setting
-    ``manage_resources=False``.
-    """
-
     def __init__(
         self,
         workers: Mapping[str, ScraperWorker[Any]],
@@ -73,16 +70,14 @@ class Crawler:
             await resource.stop()
 
     async def stream(
-        self, seeds: ScraperTask | Iterable[ScraperTask]
+        self, seeds: PipelineInput | Iterable[PipelineInput]
     ) -> AsyncIterator[RichEntry[Any]]:
-        """Yield entries while processing seed tasks and their descendants.
-
-        The first worker exception ends the crawl and is raised to the caller.
-        """
         if self._running:
             raise RuntimeError("Crawler already has an active crawl")
         self._running = True
-        seed_tasks = (seeds,) if isinstance(seeds, ScraperTask) else tuple(seeds)
+        seed_tasks = (
+            (seeds,) if isinstance(seeds, (FetchRequest, RawInput)) else tuple(seeds)
+        )
         if not seed_tasks:
             self._running = False
             return
@@ -93,7 +88,7 @@ class Crawler:
         pending = 0
         failure: Exception | None = None
 
-        async def submit(task: ScraperTask) -> None:
+        async def submit(task: PipelineInput) -> None:
             nonlocal pending
             async with state_lock:
                 pending += 1
@@ -164,7 +159,17 @@ class Crawler:
             self._running = False
 
     async def run(
-        self, seeds: ScraperTask | Iterable[ScraperTask]
+        self, seeds: PipelineInput | Iterable[PipelineInput]
     ) -> list[RichEntry[Any]]:
-        """Process a crawl to completion and return all extracted entries."""
         return [item async for item in self.stream(seeds)]
+
+    async def stream_inputs(
+        self, inputs: PipelineInput | Iterable[PipelineInput]
+    ) -> AsyncIterator[RichEntry[Any]]:
+        async for item in self.stream(inputs):
+            yield item
+
+    async def run_inputs(
+        self, inputs: PipelineInput | Iterable[PipelineInput]
+    ) -> list[RichEntry[Any]]:
+        return await self.run(inputs)

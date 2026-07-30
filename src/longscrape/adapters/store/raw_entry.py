@@ -41,7 +41,6 @@ class PyMongoRawEntryStore:
             return None
         return RawEntry(
             id=UUID(document["id"]),
-            task_hash=document.get("task_hash"),
             url=document["url"],
             content=document["content"],
             content_type=document["content_type"],
@@ -49,18 +48,17 @@ class PyMongoRawEntryStore:
             fetched_at=document["fetched_at"],
         )
 
-    async def put(self, task_hash: str, raw_entry: RawEntry) -> None:
+    async def put(self, cache_key: str, raw_entry: RawEntry) -> None:
         document = {
-            "_id": task_hash,
+            "_id": cache_key,
             "id": str(raw_entry.id),
-            "task_hash": raw_entry.task_hash,
             "url": raw_entry.url,
             "content": raw_entry.content,
             "content_type": raw_entry.content_type,
             "status_code": raw_entry.status_code,
             "fetched_at": raw_entry.fetched_at,
         }
-        await self._collection.replace_one({"_id": task_hash}, document, upsert=True)
+        await self._collection.replace_one({"_id": cache_key}, document, upsert=True)
 
     async def close(self) -> None:
         if self._client is not None:
