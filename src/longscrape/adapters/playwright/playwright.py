@@ -31,9 +31,12 @@ class PlaywrightManager(PlaywrightManagerPort):
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
 
+    def _create_playwright(self) -> Any:
+        return async_playwright()
+
     # noinspection PyUnresolvedReferences
     async def start(self):
-        self._playwright = await async_playwright().start()
+        self._playwright = await self._create_playwright().start()
         self._browser = await self._playwright.chromium.launch(headless=self.headless)
 
         context_options: Any = {"user_agent": USER_AGENT}

@@ -3,7 +3,9 @@ from longscrape.adapters.playwright.middlewares import (
     URLBlocklist,
     URLCacher,
 )
+from longscrape.adapters.playwright.patchright import PatchrightManager
 from longscrape.adapters.playwright.playwright import PlaywrightManager
+from longscrape.adapters.playwright.stealth import StealthPlaywrightManagerAdapter
 from longscrape.core.ports.playwright import (
     PlaywrightManagerPort,
     PlaywrightMiddlewarePort,
@@ -11,9 +13,11 @@ from longscrape.core.ports.playwright import (
 
 __all__ = [
     "ContentTypeBlocklist",
+    "PatchrightManager",
     "PlaywrightManager",
     "PlaywrightManagerPort",
     "PlaywrightMiddlewarePort",
+    "StealthPlaywrightManagerAdapter",
     "URLBlocklist",
     "URLCacher",
 ]

@@ -1,9 +1,11 @@
 from longscrape.adapters.httpx import HttpxManager
 from longscrape.adapters.playwright import (
     ContentTypeBlocklist,
+    PatchrightManager,
     PlaywrightManager,
     PlaywrightManagerPort,
     PlaywrightMiddlewarePort,
+    StealthPlaywrightManagerAdapter,
     URLBlocklist,
     URLCacher,
 )
@@ -11,9 +13,11 @@ from longscrape.adapters.playwright import (
 __all__ = [
     "ContentTypeBlocklist",
     "HttpxManager",
+    "PatchrightManager",
     "PlaywrightManager",
     "PlaywrightManagerPort",
     "PlaywrightMiddlewarePort",
+    "StealthPlaywrightManagerAdapter",
     "URLBlocklist",
     "URLCacher",
 ]

@@ -21,12 +21,15 @@ dependencies = [
     "playwright-stealth>=2.0.3",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/longscrape"]
-
 [dependency-groups]
 dev = [
     "pre-commit>=4.6.1",
     "pyre-check>=0.9.25",
     "ruff>=0.16.0",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/longscrape"]
+
+[tool.ruff.lint]
+extend-select = ["I"]

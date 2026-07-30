@@ -1,5 +1,4 @@
 import asyncio
-from logging import DEBUG
 from urllib.parse import urljoin
 
 from parsel.selector import Selector
@@ -13,10 +12,9 @@ from longscrape import (
     ScraperWorker,
     Task,
     TaskQueue,
-    configure_logging,
 )
 from longscrape.adapters import (
-    PlaywrightManager,
+    PatchrightManager,
     PlaywrightManagerPort,
     URLBlocklist,
     URLCacher,
@@ -126,9 +124,8 @@ class AuthorExtractor(DefaultExtractor[Author]):
 
 
 async def main() -> None:
-    configure_logging(level=DEBUG)
-    playwright = PlaywrightManager()
-    playwright.register_middleware(URLCacher(verbose=True))
+    playwright = PatchrightManager()
+    playwright.register_middleware(URLCacher())
     playwright.register_middleware(URLBlocklist())
     await playwright.start()
 
