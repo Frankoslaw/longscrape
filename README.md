@@ -1,5 +1,13 @@
 # longscrape
 
+> [!WARNING]
+> The canonical repository and place to report issues is
+> [forgejo.frankoslaw.top/frankoslaw/longscrape](https://forgejo.frankoslaw.top/frankoslaw/longscrape).
+> [Frankoslaw/longscrape](https://github.com/Frankoslaw/longscrape) is a read-only GitHub mirror.
+
+> [!CAUTION]
+> This library is in the alpha stage. Regular API-breaking changes are to be expected.
+
 `longscrape` is an asynchronous scraping toolkit built around a small pipeline:
 
 ```text

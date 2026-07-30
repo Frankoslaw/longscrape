@@ -22,7 +22,7 @@ USER_AGENT = (
 
 
 class PlaywrightManager(PlaywrightManagerPort):
-    def __init__(self, headless: bool = False, proxy: str | None = None):
+    def __init__(self, headless: bool = True, proxy: str | None = None):
         self.headless = headless
         self.proxy = proxy
         self.middlewares: list[PlaywrightMiddlewarePort] = []

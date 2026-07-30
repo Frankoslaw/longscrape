@@ -1,5 +1,4 @@
 import asyncio
-import os
 from urllib.parse import urljoin
 
 from parsel.selector import Selector
@@ -20,7 +19,7 @@ from longscrape.adapters import (
     URLBlocklist,
 )
 from longscrape.adapters.playwright.middlewares import URLCacher
-from longscrape.adapters.store.raw_entry import PyMongoRawEntryStore
+from longscrape.adapters.store.in_memory import InMemoryRawEntryStore
 
 Quote = dict[str, str]
 Author = dict[str, str]
@@ -88,14 +87,12 @@ class AuthorExtractor(DefaultExtractor[Author]):
 
 
 async def main() -> None:
-    playwright = PatchrightManager()
+    playwright = PatchrightManager(headless=False)
     playwright.register_middleware(URLBlocklist())
     playwright.register_middleware(URLCacher())
 
     fetcher = DefaultFetcher(playwright, "quotes.toscrape.com")
-    raw_entries = PyMongoRawEntryStore(
-        os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
-    )
+    raw_entries = InMemoryRawEntryStore()
     rate_limiter = LeakyBucketRateLimiter(requests_per_second=0.5)
 
     workers = {
@@ -115,7 +112,7 @@ async def main() -> None:
         ),
     }
 
-    async with Crawler(workers, resources=[playwright, raw_entries]) as crawler:
+    async with Crawler(workers, resources=[playwright]) as crawler:
         async for item in crawler.stream(Task(kind=QUOTES_TASK_KIND, query=START_URL)):
             if "quote" in item.data:
                 print(
