@@ -9,6 +9,8 @@ from longscrape.core.doamin.pipeline import (
 
 
 class FetcherPort(Protocol):
+    def get_base_domain(self) -> str: ...
+
     async def fetch(self, task: ScraperTask) -> RawEntry: ...
 
 

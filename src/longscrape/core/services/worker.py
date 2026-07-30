@@ -1,5 +1,6 @@
 from longscrape.core.doamin.pipeline import ExtractionResult, ScraperTask
 from longscrape.core.ports.pipeline import ExtractorPort, FetcherPort
+from longscrape.core.ports.ratelimit import RateLimiter
 from longscrape.logging import get_logger
 
 logger = get_logger(__name__)
@@ -12,10 +13,15 @@ class ScraperWorker[T]:
         extractor: ExtractorPort[T],
         *,
         task_kind: str | None = None,
+        rate_limiter: RateLimiter | None = None,
     ):
         self.fetcher = fetcher
         self.extractor = extractor
+        self.base_domain = fetcher.get_base_domain()
+        if not self.base_domain:
+            raise ValueError("base_domain must not be empty")
         self.task_kind = task_kind
+        self.rate_limiter = rate_limiter
 
     def is_compatible(self, task: ScraperTask) -> bool:
         return self.task_kind is None or task.kind == self.task_kind
@@ -27,6 +33,8 @@ class ScraperWorker[T]:
 
         logger.info("task started: id=%s kind=%s", task.id, task.kind)
         try:
+            if self.rate_limiter is not None:
+                await self.rate_limiter.acquire(self.base_domain)
             logger.debug("fetching task: id=%s", task.id)
             raw_entry = await self.fetcher.fetch(task)
         except Exception:

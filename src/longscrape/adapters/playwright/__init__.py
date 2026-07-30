@@ -1,5 +1,6 @@
 from longscrape.adapters.playwright.middlewares import (
     ContentTypeBlocklist,
+    PlaywrightRateLimiterMiddleware,
     URLBlocklist,
     URLCacher,
 )
@@ -17,6 +18,7 @@ __all__ = [
     "PlaywrightManager",
     "PlaywrightManagerPort",
     "PlaywrightMiddlewarePort",
+    "PlaywrightRateLimiterMiddleware",
     "StealthPlaywrightManagerAdapter",
     "URLBlocklist",
     "URLCacher",

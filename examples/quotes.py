@@ -7,6 +7,7 @@ from longscrape import (
     DefaultExtractor,
     ExtractionResult,
     InMemoryTaskQueue,
+    LeakyBucketRateLimiter,
     RawEntry,
     RichEntry,
     ScraperWorker,
@@ -31,6 +32,9 @@ class QuotesFetcher:
     def __init__(self, playwright: PlaywrightManagerPort):
         self._playwright = playwright
 
+    def get_base_domain(self) -> str:
+        return "quotes.toscrape.com"
+
     async def fetch(self, task: Task) -> RawEntry:
         if not isinstance(task.query, str):
             raise TypeError("QuotesFetcher requires a URL string query")
@@ -49,6 +53,9 @@ class QuotesFetcher:
 class AuthorFetcher:
     def __init__(self, playwright: PlaywrightManagerPort):
         self._playwright = playwright
+
+    def get_base_domain(self) -> str:
+        return "quotes.toscrape.com"
 
     async def fetch(self, task: Task) -> RawEntry:
         if not isinstance(task.query, str):
@@ -130,16 +137,19 @@ async def main() -> None:
     await playwright.start()
 
     try:
+        rate_limiter = LeakyBucketRateLimiter(requests_per_second=0.5)
         workers = {
             QUOTES_TASK_KIND: ScraperWorker(
                 QuotesFetcher(playwright),
                 QuotesExtractor(),
                 task_kind=QUOTES_TASK_KIND,
+                rate_limiter=rate_limiter,
             ),
             AUTHOR_TASK_KIND: ScraperWorker(
                 AuthorFetcher(playwright),
                 AuthorExtractor(),
                 task_kind=AUTHOR_TASK_KIND,
+                rate_limiter=rate_limiter,
             ),
         }
         queue: TaskQueue = InMemoryTaskQueue()

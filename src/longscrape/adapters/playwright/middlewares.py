@@ -8,6 +8,7 @@ from typing import TypedDict, cast
 from playwright.async_api import Route
 
 from longscrape.core.ports.playwright import PlaywrightMiddlewarePort
+from longscrape.core.ports.ratelimit import RateLimiter
 from longscrape.logging import get_logger
 
 logger = get_logger(__name__)
@@ -138,3 +139,12 @@ class URLCacher(PlaywrightMiddlewarePort):
             logger.exception("cache fetch failed: url=%s", request.url)
             await route.abort()
             return True
+
+
+class PlaywrightRateLimiterMiddleware(PlaywrightMiddlewarePort):
+    def __init__(self, rate_limiter: RateLimiter):
+        self.rate_limiter = rate_limiter
+
+    async def handle(self, route: Route) -> bool:
+        await self.rate_limiter.acquire(route.request.url)
+        return False
