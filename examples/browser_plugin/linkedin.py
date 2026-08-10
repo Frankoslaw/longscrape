@@ -10,8 +10,6 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urljoin
 
-from parsel import Selector
-
 from longscrape import (
     BrowserCaptureServer,
     DefaultExtractor,
@@ -21,6 +19,7 @@ from longscrape import (
     RichEntry,
     ScraperWorker,
 )
+from parsel import Selector
 
 SEARCH_KIND = "linkedin.people-search"
 PROFILE_KIND = "linkedin.profile"

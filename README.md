@@ -209,7 +209,7 @@ uv run --extra mongodb python examples/mongodb/reextract.py
 
 ### Browser-plugin raw input
 
-[examples/browser-plugin](examples/browser-plugin) contains a temporary Firefox
+[examples/browser-plugin](examples/browser_plugin) contains a temporary Firefox
 extension and a local LinkedIn people-search/profile extractor. Its route JSON
 maps URL globs to Longscrape task kinds, so the same extension can capture other
 configured pages. `BrowserCaptureServer` registers workers by kind and exposes a
