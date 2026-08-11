@@ -29,3 +29,4 @@
 - [ ] structured configurable logging to terminal and file
 - [ ] separate sync and async api like playwright
 - [ ] one entry may be compatible with multiple extractors like aleo details page may extract both company and person entries so for clean separation they may be registered independently and produce their own task (this also requires proper dedup on task queue)
+- [ ] in readme properly document which versions of longscrape-scrapy are compatible with which versions of scrapy

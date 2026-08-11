@@ -11,7 +11,13 @@ authors = [
     { name = "Franciszek Łopuszański", email = "franopusz2006@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "longscrape-core",
+    "scrapy>=2.17.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/longscrape_scrapy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

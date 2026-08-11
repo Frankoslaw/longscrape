@@ -893,6 +893,16 @@ provides-extras = ["playwright", "patchright", "stealth", "fastapi", "mongodb"]
 name = "longscrape-scrapy"
 version = "0.1.0"
 source = { editable = "packages/longscrape_scrapy" }
+dependencies = [
+    { name = "longscrape-core" },
+    { name = "scrapy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "longscrape-core", editable = "packages/longscrape_core" },
+    { name = "scrapy", specifier = ">=2.17.0" },
+]
 
 [[package]]
 name = "longscrape-workspace"
