@@ -1,25 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
+import scrapy.signals
 from longscrape_core import CrawlJob, JobQueue, RecordSink
-from scrapy.crawler import AsyncCrawlerProcess, AsyncCrawlerRunner, Crawler
+from scrapy.crawler import AsyncCrawlerRunner, Crawler
 from scrapy.settings import Settings
 from scrapy.utils.project import get_project_settings
 
 from longscrape_scrapy.spider import JobSpider
 
+logger = logging.getLogger(__name__)
+
 _RECORD_SINK_PIPELINE = "longscrape_scrapy.pipeline.RecordSinkPipeline"
 
 
 class CrawlService:
-    """A queue scheduler that runs complete Scrapy project crawls.
-
-    Jobs are resolved by ``CrawlJob.kind`` through the project's spider loader,
-    exactly as with ``scrapy crawl``. Each crawler is built from project
-    settings, retaining Scrapy's middleware, extensions, pipelines and feeds.
-    """
-
     def __init__(
         self,
         queue: JobQueue,
@@ -32,6 +29,7 @@ class CrawlService:
             raise ValueError("concurrency must be at least one")
         if idle_delay <= 0:
             raise ValueError("idle_delay must be greater than zero")
+
         self.queue = queue
         self.runner = runner
         self.concurrency = concurrency
@@ -48,15 +46,12 @@ class CrawlService:
         concurrency: int = 1,
         idle_delay: float = 1.0,
     ) -> "CrawlService":
-        """Create a service with the settings used by ``scrapy crawl``.
-
-        Set ``SCRAPY_SETTINGS_MODULE`` before this call when ``settings`` is
-        omitted. A supplied core sink adds this package's pipeline without
-        replacing the project's existing pipeline configuration.
-        """
         project_settings = (
             settings.copy() if settings is not None else get_project_settings()
         )
+
+        project_settings.set("TWISTED_REACTOR_ENABLED", False, priority="cmdline")
+
         if record_sink is not None:
             pipelines = project_settings.getdict("ITEM_PIPELINES")
             pipelines.setdefault(_RECORD_SINK_PIPELINE, 300)
@@ -64,24 +59,12 @@ class CrawlService:
             project_settings.set(
                 "LONGSCRAPE_RECORD_SINK", record_sink, priority="cmdline"
             )
-        # AsyncCrawlerRunner deliberately leaves reactor setup to its caller.
-        # ``scrapy crawl`` uses CrawlerProcess.start(), which installs the
-        # configured DNS resolver and sizes the reactor thread pool. Reuse the
-        # process initializer here, but keep the application's asyncio loop.
-        process = AsyncCrawlerProcess(project_settings)
-        if process.settings.getbool("TWISTED_REACTOR_ENABLED"):
-            process._setup_reactor(install_signal_handlers=False)  # noqa: SLF001
-            # ``reactor.run()`` cannot be used because asyncio already owns
-            # this thread. Starting the reactor is still required: it starts
-            # Twisted's resolver and thread-pool lifecycle while the
-            # AsyncioSelectorReactor delegates actual polling to asyncio.
-            from twisted.internet import reactor
 
-            if not reactor.running:
-                reactor.startRunning(installSignalHandlers=False)
+        runner = AsyncCrawlerRunner(project_settings)
+
         return cls(
             queue,
-            process,
+            runner,
             concurrency=concurrency,
             idle_delay=idle_delay,
         )
@@ -90,44 +73,68 @@ class CrawlService:
         job = await self.queue.dequeue()
         if job is None:
             return False
-        await self.run_job(job)
+
+        try:
+            await self.run_job(job)
+            await self.queue.mark_completed(job)
+        except Exception as exc:
+            logger.exception("Job execution failed: %s", job)
+            await self.queue.mark_failed(job, error=exc)
+
         return True
 
     async def run_job(self, job: CrawlJob) -> None:
         crawler = self.runner.create_crawler(job.kind)
         self._validate_job_spider(crawler, job)
+
+        spider_errors: list[Exception] = []
+
+        def _handle_spider_error(failure, response, spider):
+            # Extract the underlying Python exception from Twisted's Failure wrapper
+            exc = failure.value if hasattr(failure, "value") else failure
+            spider_errors.append(exc)
+
+        crawler.signals.connect(
+            _handle_spider_error, signal=scrapy.signals.spider_error
+        )
+
         await self.runner.crawl(crawler, job=job)
+
+        if spider_errors:
+            raise spider_errors[0]
+
+        finish_reason = (
+            crawler.stats.get_value("finish_reason") if crawler.stats else None
+        )
+        if finish_reason and finish_reason != "finished":
+            raise RuntimeError(f"Spider aborted with finish_reason: {finish_reason!r}")
 
     def _validate_job_spider(self, crawler: Crawler, job: CrawlJob) -> None:
         if not issubclass(crawler.spidercls, JobSpider):
-            message = (
-                f"Spider for job kind {job.kind!r} must inherit "
-                "longscrape_scrapy.JobSpider"
+            raise TypeError(
+                f"Spider for kind {job.kind!r} ({crawler.spidercls.__name__}) "
+                "must inherit longscrape_scrapy.JobSpider"
             )
-            raise TypeError(message)
 
     async def serve(self) -> None:
-        """Poll with a fixed number of consumers running complete crawls."""
         try:
             async with asyncio.TaskGroup() as group:
                 for _ in range(self.concurrency):
-                    group.create_task(self._serve_one())
+                    group.create_task(self._worker())
         except asyncio.CancelledError:
-            # ``asyncio.run`` translates Ctrl+C into cancellation of the main
-            # task. Stop all Scrapy crawlers before returning control to it.
             await self.shutdown()
         finally:
             await self.shutdown()
 
     async def shutdown(self) -> None:
-        """Stop accepting jobs and gracefully close every active crawler."""
         if self._stopping.is_set():
             return
         self._stopping.set()
-        await self.runner.stop()
-        await self.runner.join()
 
-    async def _serve_one(self) -> None:
+        await self.runner.stop()
+
+    async def _worker(self) -> None:
         while not self._stopping.is_set():
-            if not await self.run_once():
+            has_job = await self.run_once()
+            if not has_job:
                 await asyncio.sleep(self.idle_delay)

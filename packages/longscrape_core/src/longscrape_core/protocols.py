@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol
+from typing import Any, Protocol
 
 from longscrape_core.models import (
     CapturedDocument,
@@ -40,3 +40,15 @@ class JobQueue(Protocol):
     async def enqueue(self, job: CrawlJob) -> bool: ...
 
     async def dequeue(self) -> CrawlJob | None: ...
+
+    async def mark_completed(
+        self, job: CrawlJob, result: Any | None = None
+    ) -> None: ...
+
+    async def mark_failed(
+        self,
+        job: CrawlJob,
+        error: Exception | str | None = None,
+        *,
+        can_retry: bool = True,
+    ) -> None: ...
