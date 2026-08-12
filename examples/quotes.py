@@ -1,45 +1,51 @@
+"""Direct browser scraping with kind-routed queue consumption."""
+
 import asyncio
 from urllib.parse import urljoin
 
-from parsel.selector import Selector
-
 from longscrape import (
-    Crawler,
-    DefaultExtractor,
-    ExtractionResult,
-    FetchRequest,
-    LeakyBucketRateLimiter,
-    PipelineInput,
-    RawEntry,
-    RichEntry,
-    ScraperWorker,
-)
-from longscrape.adapters import (
-    DefaultFetcher,
+    PatchrightFetcher,
     PatchrightManager,
+    PlaywrightFetcher,
     URLBlocklist,
+    URLCacher,
 )
-from longscrape.adapters.playwright.middlewares import URLCacher
-from longscrape.adapters.store.in_memory import InMemoryRawEntryStore
+from longscrape_core import (
+    Document,
+    Extractor,
+    InMemoryDocumentStore,
+    InMemoryJobQueue,
+    InMemoryRecordStore,
+    InputUrl,
+    Job,
+    JobQueue,
+    Record,
+)
+from parsel import Selector
 
-Quote = dict[str, str]
-Author = dict[str, str]
-QUOTES_TASK_KIND = "quotes-page"
-AUTHOR_TASK_KIND = "author-page"
+QUOTES_KIND = "quotes-page"
+AUTHOR_KIND = "author-page"
 START_URL = "https://quotes.toscrape.com/page/1/"
 
 
-class QuotesExtractor(DefaultExtractor[Quote]):
-    def __init__(self):
-        super().__init__(allowed_domain="quotes.toscrape.com")
-
+class QuotesExtractor(Extractor):
     async def extract(
-        self, input: PipelineInput, raw_entry: RawEntry
-    ) -> ExtractionResult[Quote]:
-        selector = Selector(text=raw_entry.text)
-        items = [
-            RichEntry(
-                url=raw_entry.url,
+        self, job: Job, document: Document, queue: JobQueue
+    ) -> list[Record]:
+        selector = Selector(text=document.text)
+        for href in selector.css(".quote a[href*='/author/']::attr(href)").getall():
+            await queue.enqueue(
+                Job(kind=AUTHOR_KIND, input=InputUrl(urljoin(document.url, href)))
+            )
+        if href := selector.css(".pager .next a::attr(href)").get():
+            await queue.enqueue(
+                Job(kind=QUOTES_KIND, input=InputUrl(urljoin(document.url, href)))
+            )
+        return [
+            Record(
+                kind="quote",
+                source_url=document.url,
+                document=document,
                 data={
                     "quote": quote.css(".text::text").get("").strip(),
                     "author": quote.css(".author::text").get("").strip(),
@@ -47,84 +53,81 @@ class QuotesExtractor(DefaultExtractor[Quote]):
             )
             for quote in selector.css(".quote")
         ]
-        tasks = [
-            input.spawn(kind=AUTHOR_TASK_KIND, query=urljoin(raw_entry.url, about_href))
-            for about_href in selector.css(
-                ".quote a[href*='/author/']::attr(href)"
-            ).getall()
-        ]
-        if next_href := selector.css(".pager .next a::attr(href)").get():
-            tasks.append(
-                input.spawn(
-                    kind=QUOTES_TASK_KIND, query=urljoin(raw_entry.url, next_href)
-                )
-            )
-        return ExtractionResult(items=items, tasks=tasks)
 
 
-class AuthorExtractor(DefaultExtractor[Author]):
-    def __init__(self):
-        super().__init__(allowed_domain="quotes.toscrape.com")
-
+class AuthorExtractor(Extractor):
     async def extract(
-        self, input: PipelineInput, raw_entry: RawEntry
-    ) -> ExtractionResult[Author]:
-        selector = Selector(text=raw_entry.text)
-        return ExtractionResult(
-            items=[
-                RichEntry(
-                    url=raw_entry.url,
-                    data={
-                        "name": selector.css(".author-title::text").get("").strip(),
-                        "born_date": selector.css(".author-born-date::text")
-                        .get("")
-                        .strip(),
-                        "born_location": selector.css(".author-born-location::text")
-                        .get("")
-                        .strip(),
-                    },
-                )
-            ],
-            tasks=[],
-        )
+        self, job: Job, document: Document, queue: JobQueue
+    ) -> list[Record]:
+        selector = Selector(text=document.text)
+        return [
+            Record(
+                kind="author",
+                source_url=document.url,
+                document=document,
+                data={
+                    "name": selector.css(".author-title::text").get("").strip(),
+                    "born_date": selector.css(".author-born-date::text")
+                    .get("")
+                    .strip(),
+                    "born_location": selector.css(".author-born-location::text")
+                    .get("")
+                    .strip(),
+                },
+            )
+        ]
+
+
+async def process_job(
+    job: Job,
+    *,
+    fetcher: PlaywrightFetcher,
+    queue: JobQueue,
+    documents: InMemoryDocumentStore,
+    records: InMemoryRecordStore,
+) -> None:
+    document = await fetcher.fetch(job)
+    await documents.save(document)
+    match job.kind:
+        case "quotes-page":
+            extracted = await QuotesExtractor().extract(job, document, queue)
+        case "author-page":
+            extracted = await AuthorExtractor().extract(job, document, queue)
+        case _:
+            raise ValueError(f"Unsupported job kind: {job.kind}")
+    for record in extracted:
+        await records.save(record)
+        print(record.data)
 
 
 async def main() -> None:
-    playwright = PatchrightManager(headless=False)
-    playwright.register_middleware(URLBlocklist())
-    playwright.register_middleware(URLCacher())
-
-    fetcher = DefaultFetcher(playwright, "quotes.toscrape.com")
-    raw_entries = InMemoryRawEntryStore()
-    rate_limiter = LeakyBucketRateLimiter(requests_per_second=0.5)
-
-    workers = {
-        QUOTES_TASK_KIND: ScraperWorker(
-            fetcher,
-            QuotesExtractor(),
-            task_kind=QUOTES_TASK_KIND,
-            rate_limiter=rate_limiter,
-            raw_entry_store=raw_entries,
-        ),
-        AUTHOR_TASK_KIND: ScraperWorker(
-            fetcher,
-            AuthorExtractor(),
-            task_kind=AUTHOR_TASK_KIND,
-            rate_limiter=rate_limiter,
-            raw_entry_store=raw_entries,
-        ),
-    }
-
-    async with Crawler(workers, resources=[playwright]) as crawler:
-        async for item in crawler.stream_inputs(
-            FetchRequest(kind=QUOTES_TASK_KIND, query=START_URL)
-        ):
-            if "quote" in item.data:
-                print(
-                    f"[{item.url}] {item.data['author']}: {item.data['quote'][:35]}..."
-                )
-            else:
-                print(f"[{item.url}] author: {item.data['name']}")
+    queue = InMemoryJobQueue()
+    documents = InMemoryDocumentStore()
+    records = InMemoryRecordStore()
+    await queue.enqueue(Job(kind=QUOTES_KIND, input=InputUrl(START_URL)))
+    manager = PatchrightManager(
+        headless=False,
+        route_handlers=[
+            URLBlocklist(["google-analytics.com", "googletagmanager.com"]),
+            URLCacher(".cache/quotes"),
+        ],
+    )
+    async with PatchrightFetcher(manager) as fetcher:
+        while not queue.is_empty():
+            for kind in (QUOTES_KIND, AUTHOR_KIND):
+                while job := await queue.dequeue(kind):
+                    try:
+                        await process_job(
+                            job,
+                            fetcher=fetcher,
+                            queue=queue,
+                            documents=documents,
+                            records=records,
+                        )
+                    except Exception as error:
+                        await queue.mark_failed(job, error)
+                    else:
+                        await queue.mark_completed(job)
 
 
 if __name__ == "__main__":

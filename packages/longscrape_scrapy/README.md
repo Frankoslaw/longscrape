@@ -1,58 +1,25 @@
 # longscrape-scrapy
 
-`longscrape-scrapy` is the thin execution layer between `longscrape-core` jobs
-and Scrapy. It deliberately owns no durable state: callers provide a
-`JobQueue`, and `CrawlService` runs its jobs as bounded, in-process Scrapy
-project crawls.
+`longscrape-scrapy` runs initial core `Job`s as normal in-process Scrapy
+crawls. It owns no durable state: applications supply a `JobQueue` and may
+drain it themselves or use `CrawlService`.
 
-The package is intentionally small:
+- `JobSpider` is a normal `scrapy.Spider` with an optional `Job` argument.
+  Override `start_job()` for queued execution. Without a job, its default
+  `start()` logs a warning and exits safely under `scrapy crawl`.
+- `LongscrapePipeline` leaves native Scrapy items intact, then converts them at
+  the pipeline boundary to core `Record`s, applies configured transformers,
+  and saves them to a `RecordStore`.
+- `InMemoryJobQueue` is the core FIFO queue for initial jobs only.
 
-- `InMemoryJobQueue`: FIFO queue with pending-job de-duplication;
-- `CrawlService`: a bounded asyncio worker that resolves `CrawlJob.kind`
-  through Scrapy's project spider loader and runs complete project crawls; and
-- `JobSpider`: receives a typed `CrawlJob` through Scrapy's normal keyword
-  argument mechanism; and
-- `RecordSinkPipeline`: sends `longscrape-core` `SourceRecord` items to an
-  application-provided `RecordSink`.
-
-The included example starts one asyncio process and runs at most two Scrapy
-crawls at a time. It still loads project settings, so spider settings,
-middleware, extensions, item pipelines and feed exports behave as they do for
-`scrapy crawl`:
-
-```bash
-uv run python examples/with_scrapy/run_jobs.py
-```
-
-`CrawlService.from_project()` also configures Scrapy logging and emits its
-startup information. Pressing Ctrl+C stops active crawlers through Scrapy's
-runner before the worker exits.
-
-The example enqueues three `CrawlJob`s in code: two `quotes` jobs with distinct
-contexts, proving that the same spider can be run repeatedly, and one `books`
-job. A job kind is the project spider name.
+Items processed by `LongscrapePipeline` need a non-empty `source_url` field.
 
 ```python
-class QuotesSpider(JobSpider):
-    name = "quotes"
+from longscrape_core import InMemoryJobQueue, InputUrl, Job
+from longscrape_scrapy import CrawlService
 
-    async def start(self):
-        yield scrapy.Request(self.job.query["url"])
+queue = InMemoryJobQueue()
+await queue.enqueue(Job(kind="quotes", input=InputUrl("https://example.com")))
+service = CrawlService.from_project(queue, record_store=record_store)
+await service.run_once("quotes")
 ```
-
-To persist Scrapy items or `SourceRecord`s, pass a process-owned core sink when
-constructing the project service. Existing project pipelines remain enabled.
-For ordinary Scrapy items, the pipeline uses their `source_url` field and item
-data to create a `SourceRecord`:
-
-```python
-service = CrawlService.from_project(queue, record_sink=sink)
-```
-
-## Deliberate next steps
-
-Keep the next additions behind the existing `JobQueue` protocol: a durable
-queue adapter with job claiming/acknowledgement, retry policy, and scheduling.
-Then migrate legacy producers to enqueue `CrawlJob`; keep browser capture in
-`longscrape-neo` and enqueue its captured results or follow-up jobs rather than
-teaching this package about Playwright.

@@ -3,12 +3,12 @@
 import asyncio
 import os
 
-from longscrape_core import CrawlJob, RecordSink, SourceRecord
-from longscrape_scrapy import CrawlService, InMemoryJobQueue
+from longscrape_core import InMemoryJobQueue, InputUrl, Job, Record
+from longscrape_scrapy import CrawlService
 
 
-class PrintSink(RecordSink):
-    async def save(self, records: tuple[SourceRecord, ...]) -> None:
+class PrintStore:
+    async def save(self, record: Record) -> None:
         # for record in records:
         #     print(record.data)
         pass
@@ -48,13 +48,13 @@ async def main() -> None:
     os.environ.setdefault("SCRAPY_SETTINGS_MODULE", "with_scrapy.settings")
     queue = InMemoryJobQueue()
     jobs = (
-        CrawlJob(
+        Job(
             kind="quotes",
-            query={"url": "https://quotes.toscrape.com/page/1/"},
+            input=InputUrl("https://quotes.toscrape.com/page/1/"),
         ),
-        CrawlJob(
+        Job(
             kind="books",
-            query={"url": "https://books.toscrape.com/"},
+            input=InputUrl("https://books.toscrape.com/"),
         ),
     )
 
@@ -62,10 +62,10 @@ async def main() -> None:
         await queue.enqueue(job)
 
     print(f"Enqueued {len(jobs)} jobs; starting service...")
-    service = CrawlService.from_project(queue, record_sink=PrintSink(), concurrency=2)
+    service = CrawlService.from_project(queue, record_store=PrintStore(), concurrency=2)
 
     # Launch service in a background asyncio Task
-    serve_task = asyncio.create_task(service.serve())
+    serve_task = asyncio.create_task(service.serve(("quotes", "books")))
 
     try:
         # Monitor progress until all current tasks complete and queue is empty

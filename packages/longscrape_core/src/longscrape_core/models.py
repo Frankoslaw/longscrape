@@ -1,121 +1,92 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Mapping
+from datetime import UTC, datetime
+from typing import Any, TypeAlias
+from uuid import UUID, uuid4
 
-from longscrape_core.errors import InvalidSerializedValue
-from longscrape_core.serialization import canonical_json, fingerprint, load_json_object
-
-
-@dataclass(frozen=True)
-class CrawlJob:
-    kind: str
-    query: dict[str, Any]
-    context: dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if not self.kind.strip():
-            raise ValueError("CrawlJob.kind must not be blank.")
-        if not isinstance(self.query, dict):
-            raise TypeError("CrawlJob.query must be an object.")
-        if not isinstance(self.context, dict):
-            raise TypeError("CrawlJob.context must be an object.")
-
-        canonical_json(self.as_dict())
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "kind": self.kind,
-            "query": self.query,
-            "context": self.context,
-        }
-
-    def to_json(self) -> str:
-        return canonical_json(self.as_dict())
-
-    def fingerprint(self) -> str:
-        return fingerprint(self.as_dict())
-
-    @classmethod
-    def from_json(cls, value: str) -> CrawlJob:
-        payload = load_json_object(value)
-
-        kind = payload.get("kind")
-        query = payload.get("query")
-        context = payload.get("context", {})
-
-        if not isinstance(kind, str):
-            raise InvalidSerializedValue("CrawlJob.kind must be a string.")
-        if not isinstance(query, dict):
-            raise InvalidSerializedValue("CrawlJob.query must be an object.")
-        if not isinstance(context, dict):
-            raise InvalidSerializedValue("CrawlJob.context must be an object.")
-
-        return cls(kind=kind, query=query, context=context)
+JsonScalar: TypeAlias = str | int | float | bool | None
+JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
 
 
 @dataclass(frozen=True)
-class FetchRequest:
-    """Framework-neutral description of a document acquisition request."""
-
+class InputUrl:
     url: str
-    method: str = "GET"
-    headers: Mapping[str, str] = field(default_factory=dict)
-    body: bytes | None = None
 
     def __post_init__(self) -> None:
         if not self.url.strip():
-            raise ValueError("FetchRequest.url must not be blank.")
-        if not self.method.strip():
-            raise ValueError("FetchRequest.method must not be blank.")
+            raise ValueError("InputUrl.url must not be blank")
 
 
 @dataclass(frozen=True)
-class CapturedDocument:
-    """A fetched or externally captured document ready for extraction."""
+class InputQuery:
+    value: dict[str, JsonValue] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, dict):
+            raise TypeError("InputQuery.value must be an object")
+
+
+@dataclass(frozen=True)
+class Document:
+    """Source content that can be passed directly to an extractor."""
 
     url: str
-    content: str
+    content: bytes
     content_type: str = "text/html"
     status: int = 200
-    headers: Mapping[str, str] = field(default_factory=dict)
-    captured_at: datetime | None = None
+    headers: dict[str, str] = field(default_factory=dict)
+    fetched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, JsonValue] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.url.strip():
-            raise ValueError("CapturedDocument.url must not be blank.")
+            raise ValueError("Document.url must not be blank")
         if not self.content_type.strip():
-            raise ValueError("CapturedDocument.content_type must not be blank.")
+            raise ValueError("Document.content_type must not be blank")
+
+    @property
+    def text(self) -> str:
+        return self.content.decode("utf-8", errors="replace")
 
 
 @dataclass(frozen=True)
-class SourceRecord:
-    """A provider-neutral record emitted by a scraper or capture consumer."""
+class InputDocument:
+    """A job whose source content is already available in memory."""
 
-    id: str
+    document: Document
+
+
+type JobInput = InputUrl | InputQuery | InputDocument
+
+
+@dataclass(frozen=True)
+class Job:
+    """An initial unit of work supplied to an application-owned loop."""
+
     kind: str
-    provider: str
-    source_url: str
-    data: dict[str, Any]
-    captured_at: datetime | None = None
+    input: JobInput
+    context: dict[str, JsonValue] = field(default_factory=dict)
+    id: UUID = field(default_factory=uuid4)
 
     def __post_init__(self) -> None:
-        if not self.id.strip():
-            raise ValueError("SourceRecord.id must not be blank.")
         if not self.kind.strip():
-            raise ValueError("SourceRecord.kind must not be blank.")
-        if not self.provider.strip():
-            raise ValueError("SourceRecord.provider must not be blank.")
-        if not self.source_url.strip():
-            raise ValueError("SourceRecord.source_url must not be blank.")
-        if not isinstance(self.data, dict):
-            raise TypeError("SourceRecord.data must be an object.")
+            raise ValueError("Job.kind must not be blank")
 
 
 @dataclass(frozen=True)
-class Extraction:
-    """Records plus optional follow-up crawl jobs."""
+class Record:
+    """Structured data emitted by an extractor or transformer."""
 
-    records: tuple[SourceRecord, ...] = ()
-    follow_ups: tuple[CrawlJob, ...] = ()
+    kind: str
+    data: dict[str, Any]
+    source_url: str
+    document: Document | None = None
+    metadata: dict[str, JsonValue] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        if not self.kind.strip():
+            raise ValueError("Record.kind must not be blank")
+        if not self.source_url.strip():
+            raise ValueError("Record.source_url must not be blank")

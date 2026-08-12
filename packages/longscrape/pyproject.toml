@@ -12,7 +12,7 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi[standard]>=0.141.1",
+    "longscrape-core",
     "httpx>=0.28.1",
     "parsel>=1.11.0",
     "pydantic>=2.13.4",
@@ -30,11 +30,14 @@ stealth = [
     "playwright>=1.61.0",
     "playwright-stealth>=2.0.3",
 ]
+fastapi = [
+    "fastapi[standard]>=0.141.1",
+]
 mongodb = [
     "pymongo>=4.17.0",
 ]
 all = [
-    "longscrape[playwright,patchright,stealth,mongodb]",
+    "longscrape[playwright,patchright,stealth,fastapi,mongodb]",
 ]
 
 [tool.hatch.build.targets.wheel]

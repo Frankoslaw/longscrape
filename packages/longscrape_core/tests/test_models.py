@@ -1,52 +1,92 @@
+import asyncio
+from typing import Any, cast
+
 import pytest
-from longscrape_core import CrawlJob, Extraction, SourceRecord
+from longscrape_core import (
+    Document,
+    InMemoryDocumentStore,
+    InMemoryRecordStore,
+    InputDocument,
+    InputQuery,
+    InputUrl,
+    Job,
+    Record,
+)
 
 
-def test_crawl_job_round_trips_through_json() -> None:
-    job = CrawlJob(
-        kind="aleo.company_listing",
-        query={"location": {"miasto": "Łódź"}},
-        context={"requested_by": "csv"},
+def test_job_accepts_url_input_and_context() -> None:
+    job = Job(
+        kind="company",
+        input=InputUrl("https://example.com/company/acme"),
+        context={"requested_by": "cli"},
     )
 
-    assert CrawlJob.from_json(job.to_json()) == job
+    assert job.input == InputUrl("https://example.com/company/acme")
+    assert job.context == {"requested_by": "cli"}
 
 
-def test_equivalent_jobs_have_same_fingerprint() -> None:
-    first = CrawlJob(
-        kind="aleo.company_listing",
-        query={"count": 10, "location": {"miasto": "Łódź"}},
-    )
-    second = CrawlJob(
-        kind="aleo.company_listing",
-        query={"location": {"miasto": "Łódź"}, "count": 10},
-    )
+def test_job_accepts_document_input() -> None:
+    document = Document(url="https://example.com", content=b"<h1>Example</h1>")
+    job = Job(kind="company", input=InputDocument(document))
 
-    assert first.fingerprint() == second.fingerprint()
+    assert isinstance(job.input, InputDocument)
+    assert job.input.document is document
 
 
 def test_blank_job_kind_is_rejected() -> None:
     with pytest.raises(ValueError, match="kind"):
-        CrawlJob(kind=" ", query={})
+        Job(kind=" ", input=InputQuery())
 
 
-def test_extraction_contains_records_and_follow_ups() -> None:
-    record = SourceRecord(
-        id="aleo:company:example",
-        kind="company_listing.details",
-        provider="aleo",
-        source_url="https://aleo.com/company/example",
-        data={"record_type": "company", "name": "Example Sp. z o.o."},
-    )
-    follow_up = CrawlJob(
-        kind="aleo.company_listing",
-        query={"location": {"miasto": "Warszawa"}},
+def test_document_decodes_content_as_text() -> None:
+    document = Document(
+        url="https://example.com",
+        content="Łódź".encode(),
     )
 
-    extraction = Extraction(
-        records=(record,),
-        follow_ups=(follow_up,),
+    assert document.text == "Łódź"
+
+
+def test_record_preserves_document_provenance() -> None:
+    document = Document(url="https://example.com", content=b"<h1>Example</h1>")
+    record = Record(
+        kind="company",
+        source_url="https://example.com/company/example",
+        data={"name": "Example Sp. z o.o."},
+        document=document,
     )
 
-    assert extraction.records == (record,)
-    assert extraction.follow_ups == (follow_up,)
+    assert record.document is document
+
+
+def test_blank_url_is_rejected() -> None:
+    with pytest.raises(ValueError, match="url"):
+        InputUrl(" ")
+
+
+def test_query_input_must_be_an_object() -> None:
+    with pytest.raises(TypeError, match="object"):
+        InputQuery(value=cast(Any, []))
+
+
+def test_in_memory_document_store_uses_document_url_as_key() -> None:
+    async def check() -> None:
+        store = InMemoryDocumentStore()
+        document = Document(url="https://example.com", content=b"example")
+        await store.save(document)
+        assert await store.get(document.url) is document
+
+    asyncio.run(check())
+
+
+def test_in_memory_record_store_groups_records_by_kind() -> None:
+    async def check() -> None:
+        store = InMemoryRecordStore()
+        first = Record(kind="company", data={}, source_url="https://example.com/one")
+        second = Record(kind="person", data={}, source_url="https://example.com/two")
+        await store.save(first)
+        await store.save(second)
+        assert store.records("company") == (first,)
+        assert store.records() == (first, second)
+
+    asyncio.run(check())

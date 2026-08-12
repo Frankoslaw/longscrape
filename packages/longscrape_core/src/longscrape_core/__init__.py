@@ -1,34 +1,40 @@
-from longscrape_core.errors import (
-    InvalidSerializedValue,
-    LongscrapeError,
-)
 from longscrape_core.models import (
-    CapturedDocument,
-    CrawlJob,
-    Extraction,
-    FetchRequest,
-    SourceRecord,
+    Document,
+    InputDocument,
+    InputQuery,
+    InputUrl,
+    Job,
+    JobInput,
+    JsonValue,
+    Record,
 )
 from longscrape_core.protocols import (
+    DocumentStore,
     Extractor,
     Fetcher,
     JobQueue,
-    RecordSink,
+    RecordStore,
+    Transformer,
 )
-from longscrape_core.serialization import canonical_json, fingerprint
+from longscrape_core.queue import InMemoryJobQueue
+from longscrape_core.stores import InMemoryDocumentStore, InMemoryRecordStore
 
 __all__ = [
-    "CapturedDocument",
-    "CrawlJob",
-    "Extraction",
+    "Document",
+    "DocumentStore",
     "Extractor",
     "Fetcher",
-    "FetchRequest",
-    "InvalidSerializedValue",
+    "InputDocument",
+    "InputQuery",
+    "InputUrl",
+    "Job",
+    "JobInput",
     "JobQueue",
-    "LongscrapeError",
-    "RecordSink",
-    "SourceRecord",
-    "canonical_json",
-    "fingerprint",
+    "InMemoryDocumentStore",
+    "InMemoryJobQueue",
+    "InMemoryRecordStore",
+    "JsonValue",
+    "Record",
+    "RecordStore",
+    "Transformer",
 ]

@@ -1,4 +1,5 @@
 import scrapy
+from longscrape_core import InputUrl
 from longscrape_scrapy import JobSpider
 
 from with_scrapy.loaders import QuoteLoader
@@ -7,8 +8,11 @@ from with_scrapy.loaders import QuoteLoader
 class QuotesSpider(JobSpider):
     name = "quotes"
 
-    async def start(self):
-        yield scrapy.Request(self.job.query["url"], callback=self.parse)
+    async def start_job(self):
+        job = self.job
+        if job is None or not isinstance(job.input, InputUrl):
+            raise TypeError("QuotesSpider requires an InputUrl job")
+        yield scrapy.Request(job.input.url, callback=self.parse)
 
     def parse(self, response):
         for quote in response.css(".quote"):

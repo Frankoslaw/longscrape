@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 import scrapy.signals
-from longscrape_core import CrawlJob, JobQueue, RecordSink
+from longscrape_core import Job, JobQueue, RecordStore, Transformer
 from scrapy.crawler import AsyncCrawlerRunner, Crawler
 from scrapy.settings import Settings
 from scrapy.utils.project import get_project_settings
@@ -13,7 +13,7 @@ from longscrape_scrapy.spider import JobSpider
 
 logger = logging.getLogger(__name__)
 
-_RECORD_SINK_PIPELINE = "longscrape_scrapy.pipeline.RecordSinkPipeline"
+_LONGSCRAPE_PIPELINE = "longscrape_scrapy.pipeline.LongscrapePipeline"
 
 
 class CrawlService:
@@ -42,7 +42,8 @@ class CrawlService:
         queue: JobQueue,
         *,
         settings: Settings | None = None,
-        record_sink: RecordSink | None = None,
+        record_store: RecordStore | None = None,
+        transformers: list[Transformer] | None = None,
         concurrency: int = 1,
         idle_delay: float = 1.0,
     ) -> "CrawlService":
@@ -52,12 +53,15 @@ class CrawlService:
 
         project_settings.set("TWISTED_REACTOR_ENABLED", False, priority="cmdline")
 
-        if record_sink is not None:
+        if record_store is not None:
             pipelines = project_settings.getdict("ITEM_PIPELINES")
-            pipelines.setdefault(_RECORD_SINK_PIPELINE, 300)
+            pipelines.setdefault(_LONGSCRAPE_PIPELINE, 300)
             project_settings.set("ITEM_PIPELINES", pipelines, priority="cmdline")
             project_settings.set(
-                "LONGSCRAPE_RECORD_SINK", record_sink, priority="cmdline"
+                "LONGSCRAPE_RECORD_STORE", record_store, priority="cmdline"
+            )
+            project_settings.set(
+                "LONGSCRAPE_TRANSFORMERS", transformers or [], priority="cmdline"
             )
 
         runner = AsyncCrawlerRunner(project_settings)
@@ -69,8 +73,8 @@ class CrawlService:
             idle_delay=idle_delay,
         )
 
-    async def run_once(self) -> bool:
-        job = await self.queue.dequeue()
+    async def run_once(self, kind: str) -> bool:
+        job = await self.queue.dequeue(kind)
         if job is None:
             return False
 
@@ -83,7 +87,7 @@ class CrawlService:
 
         return True
 
-    async def run_job(self, job: CrawlJob) -> None:
+    async def run_job(self, job: Job) -> None:
         crawler = self.runner.create_crawler(job.kind)
         self._validate_job_spider(crawler, job)
 
@@ -109,18 +113,20 @@ class CrawlService:
         if finish_reason and finish_reason != "finished":
             raise RuntimeError(f"Spider aborted with finish_reason: {finish_reason!r}")
 
-    def _validate_job_spider(self, crawler: Crawler, job: CrawlJob) -> None:
+    def _validate_job_spider(self, crawler: Crawler, job: Job) -> None:
         if not issubclass(crawler.spidercls, JobSpider):
             raise TypeError(
                 f"Spider for kind {job.kind!r} ({crawler.spidercls.__name__}) "
                 "must inherit longscrape_scrapy.JobSpider"
             )
 
-    async def serve(self) -> None:
+    async def serve(self, kinds: tuple[str, ...]) -> None:
+        if not kinds:
+            raise ValueError("kinds must not be empty")
         try:
             async with asyncio.TaskGroup() as group:
                 for _ in range(self.concurrency):
-                    group.create_task(self._worker())
+                    group.create_task(self._worker(kinds))
         except asyncio.CancelledError:
             await self.shutdown()
         finally:
@@ -133,8 +139,10 @@ class CrawlService:
 
         await self.runner.stop()
 
-    async def _worker(self) -> None:
+    async def _worker(self, kinds: tuple[str, ...]) -> None:
         while not self._stopping.is_set():
-            has_job = await self.run_once()
-            if not has_job:
+            ran_job = False
+            for kind in kinds:
+                ran_job = await self.run_once(kind) or ran_job
+            if not ran_job:
                 await asyncio.sleep(self.idle_delay)

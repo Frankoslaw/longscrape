@@ -1,19 +1,32 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 import scrapy
-from longscrape_core import CrawlJob
+from longscrape_core import Job
 
 
 class JobSpider(scrapy.Spider):
-    """Base spider that receives its :class:`CrawlJob` from the worker.
+    """A Scrapy-compatible spider that optionally receives a core job."""
 
-    ``job`` is a normal Scrapy spider keyword argument.  This avoids encoding
-    application state into Scrapy's command-line argument convention and keeps
-    spiders usable with ``AsyncCrawlerRunner``.
-    """
+    job: Job | None
 
-    def __init__(self, *, job: CrawlJob, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
+    def __init__(self, *args: Any, job: Job | None = None, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
         self.job = job
+
+    async def start(self) -> AsyncIterator[Any]:
+        if self.job is None:
+            self.logger.warning(
+                "No longscrape job was supplied; %s has no queued start input.",
+                self.name,
+            )
+            return
+        async for value in self.start_job():
+            yield value
+
+    async def start_job(self) -> AsyncIterator[Any]:
+        """Yield the initial Scrapy requests for an orchestrated job."""
+        if False:
+            yield None

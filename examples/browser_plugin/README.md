@@ -11,10 +11,12 @@ Run the receiver:
 uv run uvicorn --app-dir examples/browser-plugin linkedin:app --host 127.0.0.1 --port 8765
 ```
 
-Each extracted `item.data` is printed by the receiver and the extension logs
-the number of extracted items in the browser console. The receiver uses
-`BrowserCaptureServer`, which creates a `RawInput` and runs the worker registered
-for the capture's `kind`; no fetcher, cache, or rate limiter is used.
+Each extracted record is printed by the receiver and the extension logs the
+number of extracted items in the browser console. The receiver uses a
+`CaptureScraper` with one core `Extractor` per capture kind. The capture app
+creates a `Job(InputDocument(...))`; `CaptureScraper` routes it by `job.kind`,
+stores the document, applies any configured transformers, and saves records.
+No fetcher, worker, or crawler is involved.
 
 In Firefox, open `about:debugging#/runtime/this-firefox`, choose **Load
 Temporary Add-on**, and select `extension/manifest.json`. Its settings page can

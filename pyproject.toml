@@ -13,7 +13,6 @@ authors = [
 dev = [
     "longscrape[all]",
     "longscrape-core",
-    "longscrape-neo",
     "longscrape-scrapy",
     "ipykernel>=7.3.0",
     "numpy>=2.5.1",
@@ -31,14 +30,12 @@ dev = [
 members = [
     "packages/longscrape",
     "packages/longscrape_core",
-    "packages/longscrape_neo",
     "packages/longscrape_scrapy",
 ]
 
 [tool.uv.sources]
 longscrape = { workspace = true }
 longscrape-core = { workspace = true }
-longscrape-neo = { workspace = true }
 longscrape-scrapy = { workspace = true }
 
 [tool.pyright]

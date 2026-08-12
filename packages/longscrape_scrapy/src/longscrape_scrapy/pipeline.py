@@ -2,51 +2,52 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+import scrapy
 from itemadapter import ItemAdapter
-from longscrape_core import RecordSink, SourceRecord, fingerprint
+from longscrape_core import Job, Record, RecordStore, Transformer
 from scrapy.crawler import Crawler
 
+from longscrape_scrapy.spider import JobSpider
 
-class RecordSinkPipeline:
-    """Send Scrapy items to the configured core ``RecordSink``.
 
-    Configure an application-owned sink instance under
-    ``LONGSCRAPE_RECORD_SINK`` and this pipeline under ``ITEM_PIPELINES``.
-    The sink is intentionally not serialized into spider arguments: it is a
-    process resource shared by all concurrent crawlers.
-    """
+class LongscrapePipeline:
+    """Convert native Scrapy items to records and persist transformed output."""
 
-    def __init__(self, sink: RecordSink, crawler: Crawler | None = None) -> None:
-        self.sink = sink
-        self.crawler = crawler
+    def __init__(self, store: RecordStore, transformers: list[Transformer]) -> None:
+        self.store = store
+        self.transformers = transformers
 
     @classmethod
-    def from_crawler(cls, crawler: Crawler) -> "RecordSinkPipeline":
-        sink = crawler.settings.get("LONGSCRAPE_RECORD_SINK")
-        if sink is None or not callable(getattr(sink, "save", None)):
-            raise ValueError("LONGSCRAPE_RECORD_SINK must provide async save(records)")
-        return cls(cast(RecordSink, sink), crawler)
+    def from_crawler(cls, crawler: Crawler) -> "LongscrapePipeline":
+        store = crawler.settings.get("LONGSCRAPE_RECORD_STORE")
+        if store is None or not callable(getattr(store, "save", None)):
+            raise ValueError("LONGSCRAPE_RECORD_STORE must provide async save(record)")
+        transformers = crawler.settings.get("LONGSCRAPE_TRANSFORMERS", [])
+        return cls(cast(RecordStore, store), list(transformers))
 
-    async def process_item(self, item: Any) -> Any:
-        record = item if isinstance(item, SourceRecord) else self._to_record(item)
-        await self.sink.save((record,))
+    async def process_item(self, item: Any, spider: scrapy.Spider) -> Any:
+        if not isinstance(spider, JobSpider) or spider.job is None:
+            return item
+        records = [self._to_record(item, spider, spider.job)]
+        for transformer in self.transformers:
+            records = [
+                output
+                for record in records
+                for output in await transformer.transform(spider.job, record)
+            ]
+        for record in records:
+            await self.store.save(record)
         return item
 
-    def _to_record(self, item: Any) -> SourceRecord:
-        if self.crawler is None:
-            raise RuntimeError("RecordSinkPipeline requires a Scrapy crawler")
-        spider = self.crawler.spider
-        if spider is None:
-            raise RuntimeError("Cannot persist an item before its spider starts")
+    @staticmethod
+    def _to_record(item: Any, spider: JobSpider, job: Job) -> Record:
         data = dict(ItemAdapter(item).asdict())
-        source_url = data.get("source_url")
+        source_url = data.pop("source_url", None)
         if not isinstance(source_url, str) or not source_url:
-            raise ValueError("Scrapy items sent to RecordSinkPipeline need source_url")
-        kind = type(item).__name__
-        return SourceRecord(
-            id=fingerprint({"kind": kind, "source_url": source_url, "data": data}),
-            kind=kind,
-            provider=spider.name,
+            raise ValueError("LongscrapePipeline items need a non-empty source_url")
+        return Record(
+            kind=getattr(spider, "record_kind", None) or spider.name,
             source_url=source_url,
             data=data,
+            metadata={"producer": f"scrapy:{spider.name}", "job_id": str(job.id)},
         )
