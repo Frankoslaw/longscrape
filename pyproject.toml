@@ -25,6 +25,7 @@ dev = [
     "scrapy>=2.17.0",
     "scrapy-playwright>=0.0.48",
     "coloredlogs>=15.0.1",
+    "mkdocs>=1.6.1",
 ]
 
 [tool.uv.workspace]
