@@ -3,15 +3,15 @@
 import asyncio
 import os
 
-from longscrape_core import InMemoryJobQueue, InputUrl, Job, Record
+from longscrape_core import (
+    Document,
+    InMemoryJobQueue,
+    InputDocument,
+    InputQuery,
+    InputUrl,
+    Job,
+)
 from longscrape_scrapy import CrawlService
-
-
-class PrintStore:
-    async def save(self, record: Record) -> None:
-        # for record in records:
-        #     print(record.data)
-        pass
 
 
 async def monitor_until_idle(
@@ -48,13 +48,35 @@ async def main() -> None:
     os.environ.setdefault("SCRAPY_SETTINGS_MODULE", "with_scrapy.settings")
     queue = InMemoryJobQueue()
     jobs = (
+        # Traditional Scrapy parsing: QuotesSpider yields QuoteItem instances.
         Job(
             kind="quotes",
             input=InputUrl("https://quotes.toscrape.com/page/1/"),
         ),
+        # Another native Scrapy parser; BookItem is persisted by the same
+        # low-priority MongoRecordPipeline.
         Job(
             kind="books",
             input=InputUrl("https://books.toscrape.com/"),
+        ),
+        # UrlCrawler fetches a Document; DocumentTitlePipeline extracts its title.
+        Job(
+            kind="url",
+            input=InputUrl("https://quotes.toscrape.com/"),
+        ),
+        # IdentityCrawler passes already-acquired inputs through the pipelines.
+        Job(
+            kind="identity",
+            input=InputDocument(
+                Document(
+                    url="https://example.test/captured",
+                    content=b"<title>Captured without a request</title>",
+                )
+            ),
+        ),
+        Job(
+            kind="identity",
+            input=InputQuery({"source": "manual", "name": "Example"}),
         ),
     )
 
@@ -62,10 +84,12 @@ async def main() -> None:
         await queue.enqueue(job)
 
     print(f"Enqueued {len(jobs)} jobs; starting service...")
-    service = CrawlService.from_project(queue, record_store=PrintStore(), concurrency=2)
+    service = CrawlService.from_project(queue, concurrency=2)
 
     # Launch service in a background asyncio Task
-    serve_task = asyncio.create_task(service.serve(("quotes", "books")))
+    serve_task = asyncio.create_task(
+        service.serve(("quotes", "books", "url", "identity"))
+    )
 
     try:
         # Monitor progress until all current tasks complete and queue is empty

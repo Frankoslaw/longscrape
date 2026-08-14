@@ -1,5 +1,8 @@
 import scrapy
 
+# Native Scrapy items are useful when parsing stays in the spider.  The
+# LongscrapePipeline converts these into core Records at the pipeline boundary.
+
 
 class QuoteItem(scrapy.Item):
     text = scrapy.Field()

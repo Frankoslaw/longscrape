@@ -106,7 +106,8 @@ class CompanySpider(JobSpider):
         }
 ```
 
-Configure `CrawlService.from_project(queue, record_store=store, transformers=[...])`
+Configure a low-priority `LongscrapePipeline` (or project-specific persistence
+pipeline) in Scrapy's `ITEM_PIPELINES`, then use `CrawlService.from_project(queue)`
 to install `LongscrapePipeline`. Calling the spider with `scrapy crawl` remains
 safe: `JobSpider` has no job, logs a warning, and exits without queued input.
 

@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 import scrapy.signals
-from longscrape_core import Job, JobQueue, RecordStore, Transformer
+from longscrape_core import Job, JobQueue
 from scrapy.crawler import AsyncCrawlerRunner, Crawler
 from scrapy.settings import Settings
 from scrapy.utils.project import get_project_settings
@@ -12,8 +12,6 @@ from scrapy.utils.project import get_project_settings
 from longscrape_scrapy.spider import JobSpider
 
 logger = logging.getLogger(__name__)
-
-_LONGSCRAPE_PIPELINE = "longscrape_scrapy.pipeline.LongscrapePipeline"
 
 
 class CrawlService:
@@ -42,8 +40,6 @@ class CrawlService:
         queue: JobQueue,
         *,
         settings: Settings | None = None,
-        record_store: RecordStore | None = None,
-        transformers: list[Transformer] | None = None,
         concurrency: int = 1,
         idle_delay: float = 1.0,
     ) -> "CrawlService":
@@ -52,17 +48,6 @@ class CrawlService:
         )
 
         project_settings.set("TWISTED_REACTOR_ENABLED", False, priority="cmdline")
-
-        if record_store is not None:
-            pipelines = project_settings.getdict("ITEM_PIPELINES")
-            pipelines.setdefault(_LONGSCRAPE_PIPELINE, 300)
-            project_settings.set("ITEM_PIPELINES", pipelines, priority="cmdline")
-            project_settings.set(
-                "LONGSCRAPE_RECORD_STORE", record_store, priority="cmdline"
-            )
-            project_settings.set(
-                "LONGSCRAPE_TRANSFORMERS", transformers or [], priority="cmdline"
-            )
 
         runner = AsyncCrawlerRunner(project_settings)
 
@@ -91,21 +76,27 @@ class CrawlService:
         crawler = self.runner.create_crawler(job.kind)
         self._validate_job_spider(crawler, job)
 
-        spider_errors: list[Exception] = []
+        crawl_errors: list[Exception] = []
 
         def _handle_spider_error(failure, response, spider):
             # Extract the underlying Python exception from Twisted's Failure wrapper
             exc = failure.value if hasattr(failure, "value") else failure
-            spider_errors.append(exc)
+            crawl_errors.append(exc)
+
+        def _handle_item_error(item, response, spider, failure):
+            # Pipeline exceptions do not trigger ``spider_error``.
+            exc = failure.value if hasattr(failure, "value") else failure
+            crawl_errors.append(exc)
 
         crawler.signals.connect(
             _handle_spider_error, signal=scrapy.signals.spider_error
         )
+        crawler.signals.connect(_handle_item_error, signal=scrapy.signals.item_error)
 
         await self.runner.crawl(crawler, job=job)
 
-        if spider_errors:
-            raise spider_errors[0]
+        if crawl_errors:
+            raise crawl_errors[0]
 
         finish_reason = (
             crawler.stats.get_value("finish_reason") if crawler.stats else None

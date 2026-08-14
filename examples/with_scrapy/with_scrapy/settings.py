@@ -7,6 +7,16 @@
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
+import os
+
+import coloredlogs
+
+LOG_ENABLED = False
+
+coloredlogs.install(
+    fmt="%(asctime)s [%(name)s] %(levelname)s: %(message)s", level="DEBUG"
+)
+
 BOT_NAME = "with_scrapy"
 
 SPIDER_MODULES = ["with_scrapy.spiders"]
@@ -56,11 +66,17 @@ DOWNLOAD_DELAY = 1
 #    "scrapy.extensions.telnet.TelnetConsole": None,
 # }
 
-# Configure item pipelines
-# See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-# ITEM_PIPELINES = {
-#    "with_scrapy.pipelines.WithScrapyPipeline": 300,
-# }
+# The Mongo wrapper is deliberately last: it converts finalized Scrapy items
+# to core Records only at the persistence boundary.
+ITEM_PIPELINES = {
+    "with_scrapy.pipelines.DocumentTitlePipeline": 100,
+    "with_scrapy.pipelines.UrlAuditPipeline": 200,
+    "with_scrapy.pipelines.MongoRecordPipeline": 1000,
+}
+
+LONGSCRAPE_MONGODB_URI = os.environ.get(
+    "LONGSCRAPE_MONGODB_URI", "mongodb://localhost:27017"
+)
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html

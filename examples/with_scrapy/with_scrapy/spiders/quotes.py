@@ -1,24 +1,35 @@
 import scrapy
 from longscrape_core import InputUrl
-from longscrape_scrapy import JobSpider
+from longscrape_scrapy import JobSpider, LongscrapeRequest
 
-from with_scrapy.loaders import QuoteLoader
+from with_scrapy.items import QuoteItem
 
 
 class QuotesSpider(JobSpider):
     name = "quotes"
+    start_urls = ["https://quotes.toscrape.com/page/1/"]
 
-    async def start_job(self):
+    async def start(self):
         job = self.job
-        if job is None or not isinstance(job.input, InputUrl):
-            raise TypeError("QuotesSpider requires an InputUrl job")
-        yield scrapy.Request(job.input.url, callback=self.parse)
+        if job is not None:
+            if not isinstance(job.input, InputUrl):
+                raise TypeError("QuotesSpider requires an InputUrl job")
+            # LongscrapeRequest keeps the initiating Job available on the request.
+            yield LongscrapeRequest(job.input.url, callback=self.parse, job=job)
+            return
+
+        # Preserve normal Scrapy behavior under ``scrapy crawl quotes``.
+        async for request in scrapy.Spider.start(self):
+            yield request
 
     def parse(self, response):
         for quote in response.css(".quote"):
-            loader = QuoteLoader(selector=quote, response=response)
-            loader.add_css("text", ".text::text")
-            loader.add_css("author", ".author::text")
-            loader.add_css("tags", ".tags a::text")
-            loader.add_value("source_url", response.url)
-            yield loader.load_item()
+            yield QuoteItem(
+                text=quote.css(".text::text").get(default="").strip(),
+                author=quote.css(".author::text").get(default="").strip(),
+                tags=quote.css(".tags a::text").getall(),
+                source_url=response.url,
+            )
+        next_page = response.css("li.next a::attr(href)").get()
+        if next_page is not None:
+            yield response.follow(next_page, callback=self.parse)
