@@ -10,6 +10,7 @@ from longscrape.browser import (
     URLCacher,
 )
 from longscrape.http import HttpxFetcher
+from longscrape.redis import RedisJobQueue
 from longscrape.scraper import CaptureScraper, UnknownCaptureKind
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     "URLBlocklist",
     "URLCacher",
     "UnknownCaptureKind",
+    "RedisJobQueue",
 ]

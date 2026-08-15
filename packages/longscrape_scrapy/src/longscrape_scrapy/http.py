@@ -17,7 +17,9 @@ class LongscrapeRequest(scrapy.Request):
         self.job = job
 
     @classmethod
-    def from_document(cls, job: Job, **kwargs: Any) -> "LongscrapeRequest":
+    def from_document(
+        cls, job: Job, document: Document, **kwargs: Any
+    ) -> "LongscrapeRequest":
         """Create the synthetic start request associated with a document job."""
         from longscrape_core import InputDocument
 
@@ -25,7 +27,7 @@ class LongscrapeRequest(scrapy.Request):
             raise TypeError(
                 "LongscrapeRequest.from_document requires an InputDocument job"
             )
-        return cls(job.input.document.url, job=job, **kwargs)
+        return cls(document.url, job=job, **kwargs)
 
 
 class LongscrapeResponse(HtmlResponse):

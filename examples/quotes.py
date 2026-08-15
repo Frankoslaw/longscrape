@@ -1,8 +1,10 @@
 """Direct browser scraping with kind-routed queue consumption."""
 
 import asyncio
+from dataclasses import replace
 from urllib.parse import urljoin
 
+from common import create_stores
 from longscrape import (
     PatchrightFetcher,
     PatchrightManager,
@@ -12,14 +14,15 @@ from longscrape import (
 )
 from longscrape_core import (
     Document,
+    DocumentStore,
     Extractor,
-    InMemoryDocumentStore,
-    InMemoryJobQueue,
-    InMemoryRecordStore,
     InputUrl,
     Job,
-    JobQueue,
+    JobManager,
+    JobSubmitter,
     Record,
+    RecordStore,
+    Transformer,
 )
 from parsel import Selector
 
@@ -30,22 +33,24 @@ START_URL = "https://quotes.toscrape.com/page/1/"
 
 class QuotesExtractor(Extractor):
     async def extract(
-        self, job: Job, document: Document, queue: JobQueue
+        self,
+        job: Job,
+        document: Document,
+        jobs: JobSubmitter,
     ) -> list[Record]:
         selector = Selector(text=document.text)
         for href in selector.css(".quote a[href*='/author/']::attr(href)").getall():
-            await queue.enqueue(
+            await jobs.submit(
                 Job(kind=AUTHOR_KIND, input=InputUrl(urljoin(document.url, href)))
             )
         if href := selector.css(".pager .next a::attr(href)").get():
-            await queue.enqueue(
+            await jobs.submit(
                 Job(kind=QUOTES_KIND, input=InputUrl(urljoin(document.url, href)))
             )
         return [
             Record(
                 kind="quote",
                 source_url=document.url,
-                document=document,
                 data={
                     "quote": quote.css(".text::text").get("").strip(),
                     "author": quote.css(".author::text").get("").strip(),
@@ -57,14 +62,16 @@ class QuotesExtractor(Extractor):
 
 class AuthorExtractor(Extractor):
     async def extract(
-        self, job: Job, document: Document, queue: JobQueue
+        self,
+        job: Job,
+        document: Document,
+        jobs: JobSubmitter,
     ) -> list[Record]:
         selector = Selector(text=document.text)
         return [
             Record(
                 kind="author",
                 source_url=document.url,
-                document=document,
                 data={
                     "name": selector.css(".author-title::text").get("").strip(),
                     "born_date": selector.css(".author-born-date::text")
@@ -78,33 +85,49 @@ class AuthorExtractor(Extractor):
         ]
 
 
+class StripTextFields(Transformer):
+    """A reusable transformation stage applied before records are persisted."""
+
+    async def transform(self, job: Job, record: Record) -> list[Record]:
+        return [
+            replace(
+                record,
+                data={
+                    key: value.strip() if isinstance(value, str) else value
+                    for key, value in record.data.items()
+                },
+            )
+        ]
+
+
 async def process_job(
     job: Job,
     *,
     fetcher: PlaywrightFetcher,
-    queue: JobQueue,
-    documents: InMemoryDocumentStore,
-    records: InMemoryRecordStore,
+    jobs: JobManager,
+    documents: DocumentStore,
+    records: RecordStore,
 ) -> None:
     document = await fetcher.fetch(job)
-    await documents.save(document)
+    document_ref = await documents.save(document)
     match job.kind:
         case "quotes-page":
-            extracted = await QuotesExtractor().extract(job, document, queue)
+            extracted = await QuotesExtractor().extract(job, document, jobs)
         case "author-page":
-            extracted = await AuthorExtractor().extract(job, document, queue)
+            extracted = await AuthorExtractor().extract(job, document, jobs)
         case _:
             raise ValueError(f"Unsupported job kind: {job.kind}")
-    for record in extracted:
-        await records.save(record)
-        print(record.data)
+    transformer = StripTextFields()
+    for extracted_record in extracted:
+        for record in await transformer.transform(job, extracted_record):
+            record = replace(record, document_ref=document_ref)
+            await records.save(record)
+            print(record.data)
 
 
 async def main() -> None:
-    queue = InMemoryJobQueue()
-    documents = InMemoryDocumentStore()
-    records = InMemoryRecordStore()
-    await queue.enqueue(Job(kind=QUOTES_KIND, input=InputUrl(START_URL)))
+    stores = create_stores()
+    await stores.manager.submit(Job(kind=QUOTES_KIND, input=InputUrl(START_URL)))
     manager = PatchrightManager(
         headless=False,
         route_handlers=[
@@ -113,21 +136,22 @@ async def main() -> None:
         ],
     )
     async with PatchrightFetcher(manager) as fetcher:
-        while not queue.is_empty():
+        while not await stores.is_idle():
             for kind in (QUOTES_KIND, AUTHOR_KIND):
-                while job := await queue.dequeue(kind):
+                while lease := await stores.manager.lease(kind):
                     try:
                         await process_job(
-                            job,
+                            lease.job,
                             fetcher=fetcher,
-                            queue=queue,
-                            documents=documents,
-                            records=records,
+                            jobs=stores.manager,
+                            documents=stores.documents,
+                            records=stores.records,
                         )
                     except Exception as error:
-                        await queue.mark_failed(job, error)
+                        await lease.retry(error)
                     else:
-                        await queue.mark_completed(job)
+                        await lease.acknowledge()
+    await stores.close()
 
 
 if __name__ == "__main__":

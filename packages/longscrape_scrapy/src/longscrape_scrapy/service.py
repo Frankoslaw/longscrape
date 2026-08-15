@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 import scrapy.signals
-from longscrape_core import Job, JobQueue
+from longscrape_core import Job, JobManager
 from scrapy.crawler import AsyncCrawlerRunner, Crawler
 from scrapy.settings import Settings
 from scrapy.utils.project import get_project_settings
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class CrawlService:
     def __init__(
         self,
-        queue: JobQueue,
+        jobs: JobManager,
         runner: AsyncCrawlerRunner,
         *,
         concurrency: int = 1,
@@ -28,7 +28,7 @@ class CrawlService:
         if idle_delay <= 0:
             raise ValueError("idle_delay must be greater than zero")
 
-        self.queue = queue
+        self.jobs = jobs
         self.runner = runner
         self.concurrency = concurrency
         self.idle_delay = idle_delay
@@ -37,38 +37,40 @@ class CrawlService:
     @classmethod
     def from_project(
         cls,
-        queue: JobQueue,
+        jobs: JobManager,
         *,
         settings: Settings | None = None,
         concurrency: int = 1,
         idle_delay: float = 1.0,
     ) -> "CrawlService":
-        project_settings = (
-            settings.copy() if settings is not None else get_project_settings()
-        )
+        # Settings may intentionally contain live stores (for example an async
+        # Mongo client). Scrapy's ``Settings.copy`` deep-copies values and
+        # cannot copy event-loop-bound clients/futures, so caller-provided
+        # settings must be used as-is.
+        project_settings = settings if settings is not None else get_project_settings()
 
         project_settings.set("TWISTED_REACTOR_ENABLED", False, priority="cmdline")
 
         runner = AsyncCrawlerRunner(project_settings)
 
         return cls(
-            queue,
+            jobs,
             runner,
             concurrency=concurrency,
             idle_delay=idle_delay,
         )
 
     async def run_once(self, kind: str) -> bool:
-        job = await self.queue.dequeue(kind)
-        if job is None:
+        lease = await self.jobs.lease(kind)
+        if lease is None:
             return False
 
         try:
-            await self.run_job(job)
-            await self.queue.mark_completed(job)
+            await self.run_job(lease.job)
+            await lease.acknowledge()
         except Exception as exc:
-            logger.exception("Job execution failed: %s", job)
-            await self.queue.mark_failed(job, error=exc)
+            logger.exception("Job execution failed: %s", lease.job)
+            await lease.retry(exc)
 
         return True
 

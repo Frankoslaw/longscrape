@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable, Sequence
 from typing import Any, Protocol, cast
 
 from itemadapter import ItemAdapter
-from longscrape_core import Job, JsonValue, Record, RecordStore, Transformer
+from longscrape_core import Job, JsonValue, Record, RecordRef, RecordStore, Transformer
 from scrapy.crawler import Crawler
 
 from longscrape_scrapy.items import LongscrapeDocumentItem, LongscrapeRecordItem
 from longscrape_scrapy.spider import JobSpider
+
+logger = logging.getLogger(__name__)
 
 
 class ItemExtractor(Protocol):
@@ -22,7 +25,7 @@ class ItemExtractor(Protocol):
 class RecordSink(Protocol):
     """Accept core records emitted by a Scrapy item pipeline."""
 
-    async def save(self, record: Record) -> None: ...
+    async def save(self, record: Record) -> RecordRef: ...
 
 
 class ScrapyItemExtractor:
@@ -62,8 +65,8 @@ class RecordStoreSink:
     def __init__(self, store: RecordStore) -> None:
         self.store = store
 
-    async def save(self, record: Record) -> None:
-        await self.store.save(record)
+    async def save(self, record: Record) -> RecordRef:
+        return await self.store.save(record)
 
 
 class LongscrapePipeline:
@@ -135,5 +138,6 @@ class LongscrapePipeline:
                 for output in await transformer.transform(spider.job, record)
             ]
         for record in records:
-            await self.sink.save(record)
+            ref = await self.sink.save(record)
+            logger.info("Persisted record %s (%s)", ref, record.kind)
         return item

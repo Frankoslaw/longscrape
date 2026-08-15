@@ -66,12 +66,12 @@ DOWNLOAD_DELAY = 1
 #    "scrapy.extensions.telnet.TelnetConsole": None,
 # }
 
-# The Mongo wrapper is deliberately last: it converts finalized Scrapy items
+# The record-store wrapper is deliberately last: it converts finalized Scrapy items
 # to core Records only at the persistence boundary.
 ITEM_PIPELINES = {
     "with_scrapy.pipelines.DocumentTitlePipeline": 100,
     "with_scrapy.pipelines.UrlAuditPipeline": 200,
-    "with_scrapy.pipelines.MongoRecordPipeline": 1000,
+    "with_scrapy.pipelines.RecordStorePipeline": 1000,
 }
 
 LONGSCRAPE_MONGODB_URI = os.environ.get(

@@ -39,13 +39,25 @@ class IdentityCrawler(JobSpider):
             if isinstance(response, LongscrapeResponse)
             else LongscrapeResponse.from_response(response).document
         )
-        return LongscrapeDocumentItem.from_document(document)
+        document_ref = (
+            self.job.input.document_ref
+            if self.job is not None and isinstance(self.job.input, InputDocument)
+            else None
+        )
+        return LongscrapeDocumentItem.from_document(document, document_ref=document_ref)
 
     async def start_job(self) -> AsyncIterator[scrapy.Item]:
         if self.job is None:
             raise TypeError("IdentityCrawler requires a job")
         if isinstance(self.job.input, InputDocument):
-            yield LongscrapeDocumentItem.from_document(self.job.input.document)
+            if self.document_store is None:
+                raise ValueError("InputDocument jobs require LONGSCRAPE_DOCUMENT_STORE")
+            document = await self.document_store.get(self.job.input.document_ref)
+            if document is None:
+                raise LookupError(f"Document not found: {self.job.input.document_ref}")
+            yield LongscrapeDocumentItem.from_document(
+                document, document_ref=self.job.input.document_ref
+            )
             return
         if isinstance(self.job.input, InputQuery):
             yield LongscrapeRecordItem(

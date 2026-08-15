@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from longscrape_core import Document, InputDocument, Job
+from longscrape_core import Document, DocumentStore, InputDocument, Job
 from pydantic import BaseModel, Field
 
 from longscrape.scraper import UnknownCaptureKind
@@ -21,6 +21,7 @@ class BrowserCapture(BaseModel):
 def create_capture_app(
     process: Callable[[Job], Awaitable[int]],
     *,
+    document_store: DocumentStore,
     path: str = "/captures",
 ) -> FastAPI:
     """Create a minimal browser-extension capture receiver.
@@ -36,16 +37,17 @@ def create_capture_app(
     async def capture(payload: BrowserCapture) -> dict[str, int | str]:
         if not payload.kind.strip():
             raise HTTPException(status_code=422, detail="kind must not be blank")
+        document_ref = await document_store.save(
+            Document(
+                url=payload.url,
+                content=payload.content.encode(),
+                content_type=payload.content_type,
+                metadata={"captured_by": "browser-extension"},
+            )
+        )
         job = Job(
             kind=payload.kind,
-            input=InputDocument(
-                Document(
-                    url=payload.url,
-                    content=payload.content.encode(),
-                    content_type=payload.content_type,
-                    metadata={"captured_by": "browser-extension"},
-                )
-            ),
+            input=InputDocument(document_ref),
             context=payload.query,
         )
         try:

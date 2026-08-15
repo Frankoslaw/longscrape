@@ -6,11 +6,12 @@ from typing import Any
 
 import scrapy
 import scrapy.signals
-from longscrape_core import InputDocument, InputUrl, Job
+from longscrape_core import DocumentStore, InputDocument, InputUrl, Job
 from scrapy.crawler import Crawler
 from scrapy.http import Response
 
 from longscrape_scrapy.http import LongscrapeRequest, LongscrapeResponse
+from longscrape_scrapy.runtime import resolve
 
 
 class JobSpider(scrapy.Spider):
@@ -18,9 +19,16 @@ class JobSpider(scrapy.Spider):
 
     job: Job | None
 
-    def __init__(self, *args: Any, job: Job | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *args: Any,
+        job: Job | None = None,
+        document_store: DocumentStore | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.job = job
+        self.document_store = document_store
         self.initial_url = self._initial_url(job)
         self.urls: list[str] = []
         if self.initial_url is not None:
@@ -29,6 +37,8 @@ class JobSpider(scrapy.Spider):
     @classmethod
     def from_crawler(cls, crawler: Crawler, *args: Any, **kwargs: Any) -> "JobSpider":
         spider = super().from_crawler(crawler, *args, **kwargs)
+        store_key = crawler.settings.get("LONGSCRAPE_DOCUMENT_STORE_KEY")
+        spider.document_store = resolve(store_key) if store_key else None
         crawler.signals.connect(
             spider._track_request, signal=scrapy.signals.request_scheduled
         )
@@ -45,11 +55,16 @@ class JobSpider(scrapy.Spider):
             )
             return
         if isinstance(self.job.input, InputDocument):
-            request = LongscrapeRequest.from_document(self.job, callback=self.parse)
-            self._track_request(request)
-            response = LongscrapeResponse.from_document(
-                self.job.input.document, request=request
+            if self.document_store is None:
+                raise ValueError("InputDocument jobs require LONGSCRAPE_DOCUMENT_STORE")
+            document = await self.document_store.get(self.job.input.document_ref)
+            if document is None:
+                raise LookupError(f"Document not found: {self.job.input.document_ref}")
+            request = LongscrapeRequest.from_document(
+                self.job, document, callback=self.parse
             )
+            self._track_request(request)
+            response = LongscrapeResponse.from_document(document, request=request)
             self._track_response(response)
             async for value in self._callback_output(request.callback, response):
                 yield value
@@ -68,8 +83,6 @@ class JobSpider(scrapy.Spider):
             return None
         if isinstance(job.input, InputUrl):
             return job.input.url
-        if isinstance(job.input, InputDocument):
-            return job.input.document.url
         return None
 
     def _track_url(self, url: str) -> None:

@@ -13,7 +13,14 @@ Job → Fetcher (when needed) → Document → Extractor → Transformer(s) → 
 Jobs are initial queue inputs. Their input is explicit:
 
 ```python
-from longscrape_core import Document, InputDocument, InputQuery, InputUrl, Job
+from longscrape_core import (
+    Document,
+    InMemoryDocumentStore,
+    InputDocument,
+    InputQuery,
+    InputUrl,
+    Job,
+)
 
 url_job = Job(
     kind="company",
@@ -25,18 +32,28 @@ query_job = Job(
     input=InputQuery({"name": "Acme", "country": "PL"}),
 )
 
-document_job = Job(
-    kind="company",
-    input=InputDocument(
-        Document(url="https://example.com", content=b"<html>...</html>")
-    ),
+documents = InMemoryDocumentStore()
+document_ref = await documents.save(
+    Document(url="https://example.com", content=b"<html>...</html>")
 )
+document_job = Job(kind="company", input=InputDocument(document_ref))
 ```
 
-`Fetcher`, `Extractor`, and `Transformer` are structural protocols. Extractors
-receive the core queue and may enqueue discovered jobs directly. Queue consumers
-claim one explicit kind at a time with `dequeue(kind)`; no consumer can
-accidentally take work intended for another backend.
+`Job`, `Document`, and `Record` cross store boundaries by `JobRef`,
+`DocumentRef`, and `RecordRef`. Jobs hold only JSON-safe values and document
+references, so `job.to_json()` is safe to hand to durable infrastructure.
 
-`InMemoryJobQueue`, `InMemoryDocumentStore`, and `InMemoryRecordStore` are
-process-local implementations for single-process applications and tests.
+`JobStore` owns job data and lifecycle status. `JobQueue` only schedules refs:
+it returns an expiring lease which can be acknowledged, retried, or extended.
+This makes a crashed worker's lease reclaimable without tying persistence to a
+queue implementation.
+
+For most applications, use `JobManager(InMemoryJobStore(), InMemoryJobQueue())`.
+Its `submit(job)` and `lease(kind)` methods coordinate the two protocols and
+return a managed lease whose `acknowledge()`, `retry(error)`, `fail(error)`, and
+`extend()` methods update the right state. Advanced infrastructure can use the independent
+stores and queue protocols directly.
+
+`InMemoryJobStore`, `InMemoryJobQueue`, `InMemoryDocumentStore`, and
+`InMemoryRecordStore` are process-local implementations for single-process
+applications and tests.

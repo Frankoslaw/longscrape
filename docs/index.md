@@ -39,5 +39,5 @@ planned work rather than part of the current public API.
 
 longscrape is licensed under the **Big Time Public License, version 2.0.2**.
 It permits non-commercial and qualifying small-business use, while larger
-businesses need to follow its commercial-licensing terms. See
-[LICENSE](LICENSE) for the complete, controlling license text.
+businesses need to follow its commercial-licensing terms. See the complete,
+controlling [LICENSE](LICENSE) text.

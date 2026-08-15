@@ -1,26 +1,40 @@
+from longscrape_core.manager import JobManager, ManagedLease
 from longscrape_core.models import (
     Document,
+    DocumentRef,
     InputDocument,
     InputQuery,
     InputUrl,
     Job,
     JobInput,
+    JobRef,
+    JobState,
+    JobStatus,
     JsonValue,
     Record,
+    RecordRef,
 )
 from longscrape_core.protocols import (
     DocumentStore,
     Extractor,
     Fetcher,
+    JobLease,
     JobQueue,
+    JobStore,
+    JobSubmitter,
     RecordStore,
     Transformer,
 )
-from longscrape_core.queue import InMemoryJobQueue
-from longscrape_core.stores import InMemoryDocumentStore, InMemoryRecordStore
+from longscrape_core.queue import InMemoryJobQueue, Lease
+from longscrape_core.stores import (
+    InMemoryDocumentStore,
+    InMemoryJobStore,
+    InMemoryRecordStore,
+)
 
 __all__ = [
     "Document",
+    "DocumentRef",
     "DocumentStore",
     "Extractor",
     "Fetcher",
@@ -29,12 +43,23 @@ __all__ = [
     "InputUrl",
     "Job",
     "JobInput",
+    "JobManager",
+    "JobLease",
     "JobQueue",
+    "JobRef",
+    "JobState",
+    "JobStatus",
     "InMemoryDocumentStore",
+    "InMemoryJobStore",
     "InMemoryJobQueue",
     "InMemoryRecordStore",
     "JsonValue",
+    "Lease",
+    "ManagedLease",
     "Record",
+    "RecordRef",
     "RecordStore",
+    "JobStore",
+    "JobSubmitter",
     "Transformer",
 ]

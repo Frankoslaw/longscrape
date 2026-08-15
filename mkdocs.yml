@@ -1,2 +1,9 @@
 site_name: Longscrape
 theme: readthedocs
+nav:
+- Home: index.md
+- Concepts and architecture: concepts.md
+- Installation: installation.md
+plugins:
+- mkdocstrings:
+    default_handler: python

@@ -7,7 +7,7 @@ from longscrape_core import (
     Extractor,
     InputDocument,
     Job,
-    JobQueue,
+    JobSubmitter,
     Record,
     RecordStore,
     Transformer,
@@ -30,7 +30,7 @@ class CaptureScraper:
         self,
         extractors: Mapping[str, Extractor],
         *,
-        queue: JobQueue,
+        queue: JobSubmitter,
         document_store: DocumentStore,
         record_store: RecordStore,
         transformers: Sequence[Transformer] = (),
@@ -53,8 +53,9 @@ class CaptureScraper:
                 f"No extractor registered for {job.kind!r}"
             ) from error
 
-        document = job.input.document
-        await self.document_store.save(document)
+        document = await self.document_store.get(job.input.document_ref)
+        if document is None:
+            raise LookupError(f"Document not found: {job.input.document_ref}")
         count = 0
         for extracted in await extractor.extract(job, document, self.queue):
             records = [extracted]

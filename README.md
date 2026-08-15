@@ -47,8 +47,8 @@ transformers, and save records to a core or MongoDB store.
 
 - [Browser quotes scraper](examples/quotes.py): explicit queue draining with
   Patchright.
-- [MongoDB fetch](examples/mongodb/simple.py) and
-  [document re-extraction](examples/mongodb/reextract.py).
+- [Direct quote extraction](examples/quotes.py), which persists documents and
+  records through the shared MongoDB-backed example wiring.
 - [Browser extension capture](examples/browser_plugin): FastAPI capture app
   creating `Job(InputDocument(...))` values.
 - [Scrapy integration](examples/with_scrapy): queued initial jobs processed by

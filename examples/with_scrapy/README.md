@@ -9,7 +9,7 @@ uv run python examples/with_scrapy/main.py
 
 Records persist to the `longscrape` database exposed by `compose.dev.yml`, in
 MongoDB collections named `records_quotes`, `records_url`, and
-`records_identity`, and `records_books`. `MongoRecordPipeline` owns this
+`records_identity`, and `records_books`. `RecordStorePipeline` owns this
 connection at pipeline priority 1000, after project normalization. The default
 connection is `mongodb://localhost:27017`; set `LONGSCRAPE_MONGODB_URI` to use
 another MongoDB instance.
@@ -29,7 +29,7 @@ It queues four jobs that demonstrate the supported styles:
 reads the document item emitted by `UrlCrawler` and adds its HTML title. The
 following `UrlAuditPipeline` logs `initial_url` plus every URL the spider
 scheduled or received. Finally, `LongscrapePipeline` converts items to core
-records at its sink boundary and persists them through `MongoRecordPipeline`.
+records at its sink boundary and persists them through `RecordStorePipeline`.
 
 The crawler and pipeline behavior lives in `with_scrapy/spiders/` and
 `with_scrapy/pipelines.py`; `main.py` is only the queue/service bootstrap.

@@ -7,21 +7,27 @@ Only use this example with pages and data you are authorised to process.
 import json
 from urllib.parse import urljoin
 
+from common import create_stores
 from longscrape import CaptureScraper
 from longscrape.capture import create_capture_app
 from longscrape_core import (
     Document,
     Extractor,
-    InMemoryDocumentStore,
-    InMemoryJobQueue,
-    InMemoryRecordStore,
+    InputDocument,
     Job,
+    JobSubmitter,
     Record,
 )
 from parsel import Selector
 
 SEARCH_KIND = "linkedin.people-search"
 PROFILE_KIND = "linkedin.profile"
+
+
+def document_ref_for(job: Job):
+    if not isinstance(job.input, InputDocument):
+        raise TypeError("capture extractor requires an InputDocument job")
+    return job.input.document_ref
 
 
 def compact_text(values: list[str]) -> str:
@@ -36,7 +42,9 @@ def title_name(selector: Selector) -> str:
 
 
 class LinkedInPeopleSearchExtractor(Extractor):
-    async def extract(self, job: Job, document: Document, queue) -> list[Record]:
+    async def extract(
+        self, job: Job, document: Document, queue: JobSubmitter
+    ) -> list[Record]:
         selector = Selector(text=document.text)
         records: list[Record] = []
         seen_urls: set[str] = set()
@@ -58,7 +66,7 @@ class LinkedInPeopleSearchExtractor(Extractor):
                     Record(
                         kind=job.kind,
                         source_url=url,
-                        document=document,
+                        document_ref=document_ref_for(job),
                         data={"name": name, "profile_url": url},
                     )
                 )
@@ -66,7 +74,9 @@ class LinkedInPeopleSearchExtractor(Extractor):
 
 
 class LinkedInProfileExtractor(Extractor):
-    async def extract(self, job: Job, document: Document, queue) -> list[Record]:
+    async def extract(
+        self, job: Job, document: Document, queue: JobSubmitter
+    ) -> list[Record]:
         selector = Selector(text=document.text)
         top_card = selector.xpath("//*[contains(@id, 'Topcard')]")
         name = str(job.context.get("profile_name", "")).strip()
@@ -85,7 +95,7 @@ class LinkedInProfileExtractor(Extractor):
             Record(
                 kind=job.kind,
                 source_url=document.url,
-                document=document,
+                document_ref=document_ref_for(job),
                 data={"name": name, "headline": headline},
             )
         ]
@@ -95,14 +105,15 @@ async def print_record(record: Record) -> None:
     print(json.dumps(record.data, ensure_ascii=False))
 
 
+stores = create_stores()
 scraper = CaptureScraper(
     {
         SEARCH_KIND: LinkedInPeopleSearchExtractor(),
         PROFILE_KIND: LinkedInProfileExtractor(),
     },
-    queue=InMemoryJobQueue(),
-    document_store=InMemoryDocumentStore(),
-    record_store=InMemoryRecordStore(),
+    queue=stores.manager,
+    document_store=stores.documents,
+    record_store=stores.records,
     on_record=print_record,
 )
-app = create_capture_app(scraper.scrape)
+app = create_capture_app(scraper.scrape, document_store=stores.documents)

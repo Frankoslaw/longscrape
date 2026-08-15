@@ -2,9 +2,9 @@
 
 from typing import Any
 
-import scrapy.signals
-from longscrape.mongodb import PyMongoRecordStore
+from longscrape_core import RecordStore
 from longscrape_scrapy import JobSpider, LongscrapeDocumentItem, LongscrapePipeline
+from longscrape_scrapy.runtime import resolve
 from parsel import Selector
 from scrapy.crawler import Crawler
 
@@ -53,26 +53,23 @@ class UrlAuditPipeline:
         return item
 
 
-class MongoRecordPipeline(LongscrapePipeline):
-    """Convert the final native item to a record and persist it to MongoDB.
+class RecordStorePipeline(LongscrapePipeline):
+    """Convert the final native item to a record and persist it via core storage.
 
     The priority in ``settings.py`` places this wrapper after project item
     normalization, so ordinary Scrapy pipelines never need core record types.
     """
 
-    def __init__(self, store: PyMongoRecordStore) -> None:
+    def __init__(self, store: RecordStore) -> None:
         super().__init__(store)
         self.store = store
 
     @classmethod
-    def from_crawler(cls, crawler: Crawler) -> "MongoRecordPipeline":
-        uri = crawler.settings.get(
-            "LONGSCRAPE_MONGODB_URI", "mongodb://localhost:27017"
-        )
-        pipeline = cls(PyMongoRecordStore(uri))
+    def from_crawler(cls, crawler: Crawler) -> "RecordStorePipeline":
+        store_key = crawler.settings.get("LONGSCRAPE_RECORD_STORE_KEY")
+        if store_key is None:
+            raise ValueError("LONGSCRAPE_RECORD_STORE_KEY must be configured")
+        store = resolve(store_key)
+        pipeline = cls(store)
         pipeline.crawler = crawler
-        crawler.signals.connect(pipeline.close, signal=scrapy.signals.spider_closed)
         return pipeline
-
-    async def close(self, spider: Any) -> None:
-        await self.store.close()
