@@ -18,13 +18,13 @@ DISCARD_SUBMITTER = NullJobSubmitter()
 
 # Pipeline protocols
 class Fetcher(Protocol):
-    async def fetch(
+    def fetch(
         self, job: Job, submitter: JobSubmitter = DISCARD_SUBMITTER
     ) -> AsyncIterable[Document]: ...
 
 
 class Extractor(Protocol):
-    async def extract(
+    def extract(
         self,
         documents: AsyncIterable[Document],
         job: Job,
@@ -37,7 +37,7 @@ class Extractor(Protocol):
 # provides same terminating behavior for both native longscrape usage and future
 # longscrape-scrapy integration.
 class Transformer(Protocol):
-    async def transform(
+    def transform(
         self,
         records: AsyncIterable[Record],
         job: Job,
