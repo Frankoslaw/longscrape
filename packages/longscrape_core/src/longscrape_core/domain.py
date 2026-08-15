@@ -44,6 +44,7 @@ class Job:
 
 @dataclass(frozen=True)
 class Document:
+    kind: str
     url: str
     content: bytes
     content_type: str = "text/html"

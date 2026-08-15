@@ -1,0 +1,39 @@
+from typing import AsyncIterable
+
+from longscrape.core.ports.playwright import PlaywrightManagerPort
+from longscrape_core import (
+    DISCARD_SUBMITTER,
+    Document,
+    Fetcher,
+    InputUrl,
+    Job,
+    JobSubmitter,
+)
+
+
+class PlaywrightFetcher(Fetcher):
+    def __init__(self, playwright: PlaywrightManagerPort) -> None:
+        self._playwright = playwright
+
+    async def fetch(
+        self, job: Job, submitter: JobSubmitter = DISCARD_SUBMITTER
+    ) -> AsyncIterable[Document]:
+        if not isinstance(job.input, InputUrl):
+            raise TypeError("DefaultFetcher requires a URL input")
+
+        page = await self._playwright.create_page()
+        try:
+            response = await page.goto(job.input.url)
+            content = await page.content()
+
+            yield Document(
+                kind=job.kind,
+                url=page.url,
+                content=content.encode("utf-8"),
+                status=response.status if response else 200,
+            )
+        finally:
+            await page.close()
+
+
+DefaultFetcher = PlaywrightFetcher
