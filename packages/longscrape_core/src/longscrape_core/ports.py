@@ -43,3 +43,36 @@ class Transformer(Protocol):
         job: Job,
         submitter: JobSubmitter = DISCARD_SUBMITTER,
     ) -> AsyncIterable[Record]: ...
+
+
+# Store protocols
+# TODO: in future modify stores to return handle/capability instead of random key to
+# make it easier to pass around via job queue (drastiq only accepts JSON serializable
+# data thus this will become a hard requirment at some point)
+class DocumentStore(Protocol):
+    async def store(self, document: Document) -> None: ...
+    async def load(self, key: str) -> Document | None: ...
+
+
+class RecordStore(Protocol):
+    async def store(self, record: Record) -> None: ...
+    async def get(self, key: str) -> Record | None: ...
+
+
+# TODO: In future consider buffered sink to support batched writes instead of spamming
+# the database with small records
+class RecordSink(Transformer):
+    def __init__(self, store: RecordStore) -> None:
+        self._store = store
+
+    async def transform(
+        self,
+        records: AsyncIterable[Record],
+        job: Job,
+        submitter: JobSubmitter = DISCARD_SUBMITTER,
+    ) -> AsyncIterable[Record]:
+        async for record in records:
+            await self._store.store(record)
+
+        if False:
+            yield

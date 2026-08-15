@@ -5,7 +5,7 @@ import json
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -51,7 +51,7 @@ class RawEntry:
     status_code: int = 200
 
     id: UUID = field(default_factory=lambda: uuid.uuid4())
-    fetched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    fetched_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     # Preserve the input context with the source so it can be extracted again
     # after being loaded from a raw-entry store.
     kind: str = "default"
@@ -92,7 +92,7 @@ class RichEntry[T]:
     url: str
     data: T
 
-    scraped_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    scraped_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass(frozen=True)
