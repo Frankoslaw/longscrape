@@ -636,6 +636,6 @@ MigrationBackup/
 data
 */**/.cache
 
-# playbooks # TODO: Remove in the future as playbooks are simply used for more complex testing and are not part of eighter src or documentation
+playbooks
 scripts
 examples/private
