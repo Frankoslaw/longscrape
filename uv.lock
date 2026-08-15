@@ -10,6 +10,7 @@ resolution-markers = [
 [manifest]
 members = [
     "longscrape",
+    "longscrape-core",
     "longscrape-workspace",
 ]
 
@@ -617,6 +618,7 @@ source = { editable = "packages/longscrape" }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
+    { name = "longscrape-core" },
     { name = "parsel" },
     { name = "pydantic" },
 ]
@@ -648,6 +650,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.141.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "longscrape", extras = ["playwright", "patchright", "stealth", "mongodb"], marker = "extra == 'all'", editable = "packages/longscrape" },
+    { name = "longscrape-core", editable = "packages/longscrape_core" },
     { name = "parsel", specifier = ">=1.11.0" },
     { name = "patchright", marker = "extra == 'patchright'", specifier = ">=1.61.2" },
     { name = "playwright", marker = "extra == 'patchright'", specifier = ">=1.61.0" },
@@ -660,6 +663,11 @@ requires-dist = [
 provides-extras = ["playwright", "patchright", "stealth", "mongodb", "all"]
 
 [[package]]
+name = "longscrape-core"
+version = "0.1.0"
+source = { editable = "packages/longscrape_core" }
+
+[[package]]
 name = "longscrape-workspace"
 version = "0.1.0"
 source = { virtual = "." }
@@ -668,6 +676,7 @@ source = { virtual = "." }
 dev = [
     { name = "ipykernel" },
     { name = "longscrape", extra = ["all"] },
+    { name = "longscrape-core" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pandas-stubs" },
@@ -683,6 +692,7 @@ dev = [
 dev = [
     { name = "ipykernel", specifier = ">=7.3.0" },
     { name = "longscrape", extras = ["all"], editable = "packages/longscrape" },
+    { name = "longscrape-core", editable = "packages/longscrape_core" },
     { name = "numpy", specifier = ">=2.5.2" },
     { name = "pandas", specifier = ">=3.0.5" },
     { name = "pandas-stubs", specifier = ">=3.0.5.260730" },

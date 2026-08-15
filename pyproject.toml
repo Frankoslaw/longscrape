@@ -11,6 +11,7 @@ requires-python = ">=3.14"
 [dependency-groups]
 dev = [
     "longscrape[all]",
+    "longscrape-core",
     "ipykernel>=7.3.0",
     "numpy>=2.5.2",
     "pandas>=3.0.5",
@@ -23,10 +24,12 @@ dev = [
 
 [tool.uv.workspace]
 members = [
-    "packages/longscrape",
+    "packages/longscrape_core",
+    "packages/longscrape"
 ]
 
 [tool.uv.sources]
+longscrape-core = { workspace = true }
 longscrape = { workspace = true }
 
 [tool.pyright]
