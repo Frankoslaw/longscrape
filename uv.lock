@@ -613,7 +613,7 @@ wheels = [
 
 [[package]]
 name = "longscrape"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/longscrape" }
 dependencies = [
     { name = "httpx" },
@@ -668,12 +668,12 @@ provides-extras = ["playwright", "patchright", "stealth", "mongodb", "browser-ca
 
 [[package]]
 name = "longscrape-core"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/longscrape_core" }
 
 [[package]]
 name = "longscrape-workspace"
-version = "0.1.0"
+version = "0.2.0"
 source = { virtual = "." }
 
 [package.dev-dependencies]
