@@ -1,6 +1,5 @@
 from typing import AsyncIterable
 
-from longscrape.core.ports.playwright import PlaywrightManagerPort
 from longscrape_core import (
     DISCARD_SUBMITTER,
     Document,
@@ -9,6 +8,8 @@ from longscrape_core import (
     Job,
     JobSubmitter,
 )
+
+from longscrape.core.ports.playwright import PlaywrightManagerPort
 
 
 class PlaywrightFetcher(Fetcher):
@@ -34,6 +35,3 @@ class PlaywrightFetcher(Fetcher):
             )
         finally:
             await page.close()
-
-
-DefaultFetcher = PlaywrightFetcher

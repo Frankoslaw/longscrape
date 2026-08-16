@@ -1,8 +1,11 @@
 import asyncio
 import time
+from typing import Protocol
 from urllib.parse import urlparse
 
-from longscrape import RateLimiter
+
+class RateLimiter(Protocol):
+    async def acquire(self, key: str) -> None: ...
 
 
 def _get_domain(url: str) -> str:

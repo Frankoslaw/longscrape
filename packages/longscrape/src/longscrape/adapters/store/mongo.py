@@ -33,6 +33,7 @@ class PyMongoDocumentStore(DocumentStore):
     async def store(self, document: Document) -> None:
         payload = {
             "_id": document.url,
+            "kind": document.kind,
             "url": document.url,
             "content": document.content,
             "content_type": document.content_type,
@@ -47,6 +48,7 @@ class PyMongoDocumentStore(DocumentStore):
         if doc is None:
             return None
         return Document(
+            kind=doc["kind"],
             url=doc["url"],
             content=doc["content"],
             content_type=doc.get("content_type", "text/html"),

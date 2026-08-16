@@ -1,29 +1,24 @@
 from importlib import import_module
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from longscrape.adapters.fetchers.playwright_fetcher import PlaywrightFetcher
+    from longscrape.adapters.playwright.patchright import PatchrightManager
+    from longscrape.adapters.playwright.playwright import PlaywrightManager
+    from longscrape.adapters.playwright.stealth import StealthPlaywrightManagerAdapter
 
 __all__ = [
-    "ContentTypeBlocklist",
-    "DefaultFetcher",
     "PatchrightManager",
+    "PlaywrightFetcher",
     "PlaywrightManager",
-    "PlaywrightManagerPort",
-    "PlaywrightMiddlewarePort",
-    "PlaywrightRateLimiterMiddleware",
     "StealthPlaywrightManagerAdapter",
-    "URLBlocklist",
-    "URLCacher",
 ]
 
 _ADAPTERS = {
-    "ContentTypeBlocklist": "longscrape.adapters.playwright.middlewares",
-    "DefaultFetcher": "longscrape.adapters.playwright.fetcher",
     "PatchrightManager": "longscrape.adapters.playwright.patchright",
+    "PlaywrightFetcher": "longscrape.adapters.fetchers.playwright_fetcher",
     "PlaywrightManager": "longscrape.adapters.playwright.playwright",
-    "PlaywrightManagerPort": "longscrape.core.ports.playwright",
-    "PlaywrightMiddlewarePort": "longscrape.core.ports.playwright",
-    "PlaywrightRateLimiterMiddleware": "longscrape.adapters.playwright.middlewares",
     "StealthPlaywrightManagerAdapter": "longscrape.adapters.playwright.stealth",
-    "URLBlocklist": "longscrape.adapters.playwright.middlewares",
-    "URLCacher": "longscrape.adapters.playwright.middlewares",
 }
 
 

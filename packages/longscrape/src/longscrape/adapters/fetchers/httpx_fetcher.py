@@ -11,7 +11,7 @@ from longscrape_core import (
 )
 
 
-class NewHttpxFetcher(Fetcher):
+class HttpxFetcher(Fetcher):
     def __init__(self, http: httpx.AsyncClient):
         self._http = http
 

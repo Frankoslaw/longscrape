@@ -1,37 +1,41 @@
 from importlib import import_module
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from longscrape.adapters.browser_capture import BrowserCapture, BrowserCaptureServer
+    from longscrape.adapters.fetchers import (
+        CachedFetcher,
+        HttpxFetcher,
+        PlaywrightFetcher,
+        RateLimitedFetcher,
+    )
+    from longscrape.adapters.ratelimit import LeakyBucketRateLimiter, RateLimiter
+    from longscrape.adapters.store import InMemoryDocumentStore, PyMongoDocumentStore
 
 __all__ = [
-    "ContentTypeBlocklist",
-    "DefaultFetcher",
+    "BrowserCapture",
+    "BrowserCaptureServer",
+    "CachedFetcher",
     "HttpxFetcher",
-    "HttpxManager",
-    "InMemoryRawEntryStore",
-    "PatchrightManager",
-    "PlaywrightManager",
-    "PlaywrightManagerPort",
-    "PlaywrightMiddlewarePort",
-    "PlaywrightRateLimiterMiddleware",
-    "PyMongoRawEntryStore",
-    "StealthPlaywrightManagerAdapter",
-    "URLBlocklist",
-    "URLCacher",
+    "InMemoryDocumentStore",
+    "LeakyBucketRateLimiter",
+    "PyMongoDocumentStore",
+    "PlaywrightFetcher",
+    "RateLimitedFetcher",
+    "RateLimiter",
 ]
 
 _ADAPTERS = {
-    "ContentTypeBlocklist": "longscrape.adapters.playwright.middlewares",
-    "DefaultFetcher": "longscrape.adapters.playwright.fetcher",
-    "HttpxFetcher": "longscrape.adapters.httpx",
-    "HttpxManager": "longscrape.adapters.httpx",
-    "InMemoryRawEntryStore": "longscrape.adapters.store.in_memory",
-    "PatchrightManager": "longscrape.adapters.playwright.patchright",
-    "PlaywrightManager": "longscrape.adapters.playwright.playwright",
-    "PlaywrightManagerPort": "longscrape.core.ports.playwright",
-    "PlaywrightMiddlewarePort": "longscrape.core.ports.playwright",
-    "PlaywrightRateLimiterMiddleware": "longscrape.adapters.playwright.middlewares",
-    "PyMongoRawEntryStore": "longscrape.adapters.store.raw_entry",
-    "StealthPlaywrightManagerAdapter": "longscrape.adapters.playwright.stealth",
-    "URLBlocklist": "longscrape.adapters.playwright.middlewares",
-    "URLCacher": "longscrape.adapters.playwright.middlewares",
+    "BrowserCapture": "longscrape.adapters.browser_capture",
+    "BrowserCaptureServer": "longscrape.adapters.browser_capture",
+    "CachedFetcher": "longscrape.adapters.fetchers",
+    "HttpxFetcher": "longscrape.adapters.fetchers",
+    "InMemoryDocumentStore": "longscrape.adapters.store.in_memory",
+    "LeakyBucketRateLimiter": "longscrape.adapters.ratelimit",
+    "PyMongoDocumentStore": "longscrape.adapters.store.mongo",
+    "PlaywrightFetcher": "longscrape.adapters.fetchers",
+    "RateLimitedFetcher": "longscrape.adapters.fetchers",
+    "RateLimiter": "longscrape.adapters.ratelimit",
 }
 
 
@@ -40,28 +44,4 @@ def __getattr__(name: str):
         module_name = _ADAPTERS[name]
     except KeyError as error:
         raise AttributeError(name) from error
-    try:
-        return getattr(import_module(module_name), name)
-    except ModuleNotFoundError as error:
-        extra = _OPTIONAL_EXTRAS.get(name)
-        if extra is None:
-            raise
-        raise ModuleNotFoundError(
-            f"{name} requires the optional '{extra}' extra. "
-            f"Install it with: pip install longscrape[{extra}]"
-        ) from error
-
-
-_OPTIONAL_EXTRAS = {
-    "ContentTypeBlocklist": "playwright",
-    "DefaultFetcher": "playwright",
-    "PatchrightManager": "patchright",
-    "PlaywrightManager": "playwright",
-    "PlaywrightManagerPort": "playwright",
-    "PlaywrightMiddlewarePort": "playwright",
-    "PlaywrightRateLimiterMiddleware": "playwright",
-    "PyMongoRawEntryStore": "mongodb",
-    "StealthPlaywrightManagerAdapter": "stealth",
-    "URLBlocklist": "playwright",
-    "URLCacher": "playwright",
-}
+    return getattr(import_module(module_name), name)

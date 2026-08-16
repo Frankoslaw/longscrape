@@ -29,7 +29,9 @@ class ExampleFetcher:
                 context={"source": job.input.url},
             )
         )
-        yield Document(url=job.input.url, content=b"<title>Example</title>")
+        yield Document(
+            kind="example", url=job.input.url, content=b"<title>Example</title>"
+        )
 
 
 class ExampleExtractor:

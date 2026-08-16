@@ -1,6 +1,5 @@
 from collections.abc import AsyncIterator, Callable
 
-from longscrape import RateLimiter
 from longscrape_core import (
     DISCARD_SUBMITTER,
     Document,
@@ -9,6 +8,8 @@ from longscrape_core import (
     Job,
     JobSubmitter,
 )
+
+from longscrape.adapters.ratelimit import RateLimiter
 
 
 def _url_key(job: Job) -> str:

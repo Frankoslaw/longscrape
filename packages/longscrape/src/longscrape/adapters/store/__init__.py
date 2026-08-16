@@ -1,16 +1,15 @@
 from importlib import import_module
+from typing import TYPE_CHECKING
 
-__all__ = ["InMemoryRawEntryStore", "PyMongoRawEntryStore"]
+from longscrape.adapters.store.in_memory import InMemoryDocumentStore
 
-_ADAPTERS = {
-    "InMemoryRawEntryStore": "longscrape.adapters.store.in_memory",
-    "PyMongoRawEntryStore": "longscrape.adapters.store.raw_entry",
-}
+if TYPE_CHECKING:
+    from longscrape.adapters.store.mongo import PyMongoDocumentStore
+
+__all__ = ["InMemoryDocumentStore", "PyMongoDocumentStore"]
 
 
 def __getattr__(name: str):
-    try:
-        module_name = _ADAPTERS[name]
-    except KeyError as error:
-        raise AttributeError(name) from error
-    return getattr(import_module(module_name), name)
+    if name != "PyMongoDocumentStore":
+        raise AttributeError(name)
+    return import_module("longscrape.adapters.store.mongo").PyMongoDocumentStore

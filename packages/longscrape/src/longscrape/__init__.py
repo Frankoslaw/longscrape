@@ -1,65 +1,49 @@
 import logging as stdlib_logging
 
-from longscrape.core.domain.pipeline import (
-    CachePolicy,
-    ExtractionResult,
-    FetchRequest,
-    PipelineInput,
-    RawEntry,
-    RawInput,
-    RichEntry,
-    ScraperTask,
+from longscrape_core import (
+    DISCARD_SUBMITTER,
+    Document,
+    Extractor,
+    Fetcher,
+    InputDocument,
+    InputQuery,
+    InputUrl,
+    Job,
+    JobRequest,
+    JobSubmitter,
+    Record,
+    Transformer,
 )
-from longscrape.core.domain.queue import InMemoryTaskQueue
-from longscrape.core.ports.pipeline import (
-    DefaultExtractor,
-    ExtractorPort,
-    FetcherPort,
-    RawEntryStore,
-)
-from longscrape.core.ports.queue import TaskQueue
-from longscrape.core.ports.ratelimit import (
-    DummyRateLimiter,
-    LeakyBucketRateLimiter,
-    RateLimiter,
-)
-from longscrape.core.services.browser_capture import (
-    BrowserCapture,
-    BrowserCaptureServer,
-)
-from longscrape.core.services.crawler import Crawler
-from longscrape.core.services.reextract import ReExtractor, ReExtractWorker
-from longscrape.core.services.worker import ScraperWorker
+from longscrape_core.ports import DocumentStore, RecordSink, RecordStore
+
+from longscrape.adapters.browser_capture import BrowserCapture, BrowserCaptureServer
+from longscrape.adapters.fetchers import CachedFetcher, RateLimitedFetcher
+from longscrape.adapters.ratelimit import LeakyBucketRateLimiter, RateLimiter
 from longscrape.logging import configure_logging
 
 stdlib_logging.getLogger("longscrape").addHandler(stdlib_logging.NullHandler())
 
-Task = ScraperTask
-
 __all__ = [
     "BrowserCapture",
     "BrowserCaptureServer",
-    "CachePolicy",
-    "Crawler",
-    "DefaultExtractor",
-    "DummyRateLimiter",
-    "ExtractionResult",
-    "ExtractorPort",
-    "FetchRequest",
-    "FetcherPort",
-    "InMemoryTaskQueue",
+    "CachedFetcher",
+    "DISCARD_SUBMITTER",
+    "Document",
+    "DocumentStore",
+    "Extractor",
+    "Fetcher",
+    "InputDocument",
+    "InputQuery",
+    "InputUrl",
+    "Job",
+    "JobRequest",
+    "JobSubmitter",
     "LeakyBucketRateLimiter",
-    "PipelineInput",
     "RateLimiter",
-    "RawEntry",
-    "RawEntryStore",
-    "RawInput",
-    "ReExtractWorker",
-    "ReExtractor",
-    "RichEntry",
-    "ScraperTask",
-    "ScraperWorker",
-    "Task",
-    "TaskQueue",
+    "RateLimitedFetcher",
+    "Record",
+    "RecordSink",
+    "RecordStore",
+    "Transformer",
     "configure_logging",
 ]
