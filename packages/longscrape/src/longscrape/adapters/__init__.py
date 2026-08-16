@@ -10,7 +10,12 @@ if TYPE_CHECKING:
         RateLimitedFetcher,
     )
     from longscrape.adapters.ratelimit import LeakyBucketRateLimiter, RateLimiter
-    from longscrape.adapters.store import InMemoryDocumentStore, PyMongoDocumentStore
+    from longscrape.adapters.store import (
+        InMemoryDocumentStore,
+        InMemoryRecordStore,
+        PyMongoDocumentStore,
+        PyMongoRecordStore,
+    )
 
 __all__ = [
     "BrowserCapture",
@@ -18,8 +23,10 @@ __all__ = [
     "CachedFetcher",
     "HttpxFetcher",
     "InMemoryDocumentStore",
+    "InMemoryRecordStore",
     "LeakyBucketRateLimiter",
     "PyMongoDocumentStore",
+    "PyMongoRecordStore",
     "PlaywrightFetcher",
     "RateLimitedFetcher",
     "RateLimiter",
@@ -31,8 +38,10 @@ _ADAPTERS = {
     "CachedFetcher": "longscrape.adapters.fetchers",
     "HttpxFetcher": "longscrape.adapters.fetchers",
     "InMemoryDocumentStore": "longscrape.adapters.store.in_memory",
+    "InMemoryRecordStore": "longscrape.adapters.store.in_memory",
     "LeakyBucketRateLimiter": "longscrape.adapters.ratelimit",
     "PyMongoDocumentStore": "longscrape.adapters.store.mongo",
+    "PyMongoRecordStore": "longscrape.adapters.store.mongo",
     "PlaywrightFetcher": "longscrape.adapters.fetchers",
     "RateLimitedFetcher": "longscrape.adapters.fetchers",
     "RateLimiter": "longscrape.adapters.ratelimit",

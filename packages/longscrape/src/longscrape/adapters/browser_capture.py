@@ -1,7 +1,7 @@
 import hmac
 import inspect
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +12,6 @@ from longscrape_core import (
     InputDocument,
     Job,
     JobSubmitter,
-    JsonValue,
     Record,
 )
 from longscrape_core.ports import DocumentStore
@@ -24,7 +23,7 @@ class BrowserCapture(BaseModel):
     url: str
     content: str
     content_type: str = "text/html"
-    context: dict[str, JsonValue] = Field(default_factory=dict)
+    context: dict[str, Any] = Field(default_factory=dict)
 
 
 async def _one(document: Document) -> AsyncIterator[Document]:
@@ -81,7 +80,6 @@ class BrowserCaptureServer:
             ) from error
 
         document = Document(
-            kind=capture.kind,
             url=capture.url,
             content=capture.content.encode("utf-8"),
             content_type=capture.content_type,

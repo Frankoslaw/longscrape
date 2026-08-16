@@ -29,7 +29,6 @@ class HttpxFetcher(Fetcher):
 
         # noinspection PyTypeChecker
         yield Document(
-            kind=job.kind,
             url=str(response.url),
             content=response.content,
             headers=dict(response.headers),

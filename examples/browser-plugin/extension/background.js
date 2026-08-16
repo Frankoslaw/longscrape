@@ -13,7 +13,7 @@ browser.runtime.onMessage.addListener(async (message) => {
       },
       body: JSON.stringify({
         url: message.url,
-        query: message.query,
+        context: message.context,
         kind: message.kind,
         content: message.content,
         content_type: message.content_type,
@@ -27,7 +27,7 @@ browser.runtime.onMessage.addListener(async (message) => {
     console.info("Browser capture delivered", {
       url: message.url,
       kind: message.kind,
-      items: result.items,
+      records: result.records,
     });
     return { status: succeeded ? "success" : "failure" };
   } catch (error) {

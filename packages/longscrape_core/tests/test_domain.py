@@ -21,10 +21,8 @@ def test_jobs_receive_distinct_ids_and_contexts() -> None:
 
 
 def test_document_and_record_defaults_are_utc_and_not_shared() -> None:
-    first_document = Document(kind="article", url="https://example.com", content=b"one")
-    second_document = Document(
-        kind="article", url="https://example.org", content=b"two"
-    )
+    first_document = Document(url="https://example.com", content=b"one")
+    second_document = Document(url="https://example.org", content=b"two")
     first_record = Record(kind="article", data={"title": "One"})
 
     assert first_document.content_type == "text/html"
@@ -36,7 +34,6 @@ def test_document_and_record_defaults_are_utc_and_not_shared() -> None:
 
 def test_job_inputs_preserve_structured_queue_payloads() -> None:
     document = Document(
-        kind="article",
         url="https://example.com/page",
         content=b"<html></html>",
         headers={"content-language": "en"},

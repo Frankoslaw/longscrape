@@ -28,7 +28,6 @@ class PlaywrightFetcher(Fetcher):
             content = await page.content()
 
             yield Document(
-                kind=job.kind,
                 url=page.url,
                 content=content.encode("utf-8"),
                 status=response.status if response else 200,

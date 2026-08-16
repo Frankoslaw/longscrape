@@ -50,15 +50,15 @@ async function capture() {
   const route = await matchingRoute(url);
   if (!route) return;
 
-  const query = {
-    ...(route.query && typeof route.query === "object" ? route.query : {}),
+  const context = {
+    ...(route.context && typeof route.context === "object" ? route.context : {}),
     url,
     page_title: document.title,
   };
   const payload = {
     type: "capture",
     url,
-    query,
+    context,
     kind: route.kind,
   };
 

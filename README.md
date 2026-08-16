@@ -6,247 +6,104 @@
 > [Frankoslaw/longscrape](https://github.com/Frankoslaw/longscrape) is a read-only GitHub mirror.
 
 > [!CAUTION]
-> This library is in the alpha stage. Regular API-breaking changes are to be expected.
+> This library is in alpha and its API may change.
 
-`longscrape` is an asynchronous scraping toolkit built around a small pipeline:
+`longscrape` is an asynchronous scraping toolkit built from small, composable
+pipeline stages:
 
 ```text
-FetchRequest → Fetcher → RawEntry → Extractor → RichEntry + child inputs
-RawInput ───────────────────→ Extractor
+Job → Fetcher → Document → Extractor → Record → Transformer
+                    └──────────────→ JobRequest (follow-up work)
 ```
 
-You provide the site-specific fetching and extraction logic. The library runs
-the pipeline, optionally rate-limits network requests, and can reuse saved raw
-responses before any network request is made.
+The stable domain types and pipeline contracts live in `longscrape-core`.
+`longscrape` provides practical adapters such as HTTP and browser fetchers,
+cache and rate-limit decorators, document stores, and a browser-capture server.
 
 ## Install
-
-The core package includes the HTTP client and HTML selector dependencies:
 
 ```bash
 uv sync
 ```
 
-Browser and MongoDB adapters are optional:
+Optional adapters:
 
 ```bash
-uv sync --extra playwright  # Playwright browser adapter
-uv sync --extra patchright  # Patchright browser adapter
-uv sync --extra stealth     # Playwright with playwright-stealth
-uv sync --extra mongodb     # PyMongo raw-entry storage
+uv sync --extra playwright  # browser fetcher
+uv sync --extra patchright  # Patchright browser support
+uv sync --extra mongodb     # MongoDB document store
 ```
 
-`patchright` and `stealth` include Playwright automatically. Importing the core
-package does not import any of these optional adapters.
+## A pipeline
 
-## Core concepts
-
-### `Task`
-
-A `Task` describes one unit of work. Its `kind` selects the appropriate worker,
-and its `query` contains the fetcher input—usually a URL.
+Create a `Job`, pass it to a fetcher, and pass the document stream to an
+extractor. Each stage is an async iterable, so records are handled as soon as
+they are available.
 
 ```python
-task = Task(kind="country-page", query="https://example.com/countries")
+import httpx
+
+from longscrape import InputUrl, Job
+from longscrape.adapters import HttpxFetcher
+
+job = Job("article", InputUrl("https://example.com/article"))
+async with httpx.AsyncClient() as http:
+    documents = HttpxFetcher(http).fetch(job)
+    async for record in ArticleExtractor().extract(documents, job):
+        print(record.data)
 ```
 
-`Task` remains an alias for `FetchRequest`. Its `query` can be any
-JSON-serializable shape, such as a URL string or `{"city": "Warsaw",
-"country": "PL"}`. A deterministic request fingerprint is calculated from
-`kind` and `query`; callers do not supply cache keys. Put every
-request-affecting setting in the query so it contributes to the fingerprint.
+An extractor receives `documents`, `job`, and an optional `JobSubmitter`.
+Yield `Record` values and use `await submitter.submit(JobRequest(...))` for
+discovered work. The quotes example shows a minimal in-memory queue submitter.
 
-### `Fetcher` and `RawEntry`
-
-A fetcher implements `FetcherPort`. It receives a task, performs the network or
-browser work, and returns the unprocessed source as a `RawEntry`.
+Decorators compose around any fetcher:
 
 ```python
-fetcher = HttpxFetcher(http, base_domain="example.com")
-```
-
-`RawEntry` is the fetched document before parsing. Its body is `str | bytes`;
-it retains the final URL, content type, status code, and fetch time. Caching raw entries is useful
-because extraction can be changed and rerun without fetching the page again.
-
-For browser scraping, use the optional `DefaultFetcher` together with a
-`PlaywrightManager` or `PatchrightManager` instead of writing this fetcher.
-
-### `Extractor`, `RichEntry`, and `ExtractionResult`
-
-An extractor implements `ExtractorPort`. It turns a `RawEntry` into structured
-`RichEntry` values and may schedule further tasks. `DefaultExtractor` supplies
-an `allowed_domain` compatibility check.
-
-```python
-class CountryExtractor(DefaultExtractor[str]):
-    def __init__(self) -> None:
-        super().__init__(allowed_domain="example.com")
-
-    async def extract(
-        self, task: Task, raw_entry: RawEntry
-    ) -> ExtractionResult[str]:
-        selector = Selector(text=raw_entry.content)
-        countries = [
-            RichEntry(url=raw_entry.url, data=name.strip())
-            for name in selector.css(".country-name::text").getall()
-        ]
-        return ExtractionResult(items=countries, tasks=[])
-```
-
-Unlike `RawEntry`, a `RichEntry` is application data: `data` can be any typed
-value, such as a dictionary, dataclass, or string. `ExtractionResult.items`
-contains the extracted records; `ExtractionResult.tasks` contains discovered
-follow-up work.
-
-### `RawInput` and `ScraperWorker`
-
-`RawInput` sends an already acquired entry straight to an extractor. It has the
-same `kind` and flexible `query` fields as `FetchRequest`, so an extractor gets
-the same context from browser-plugin and fetched inputs.
-
-```python
-input = RawInput(
-    kind="company-page",
-    query={"company_id": "acme-123"},
-    raw_entry=RawEntry(url=plugin_page.url, content=plugin_page.html),
+fetcher = RateLimitedFetcher(
+    CachedFetcher(HttpxFetcher(http), InMemoryDocumentStore()),
+    LeakyBucketRateLimiter(requests_per_second=1),
 )
-worker = ScraperWorker(None, CompanyExtractor(), task_kind="company-page")
-async with Crawler({"company-page": worker}) as crawler:
-    companies = await crawler.run_inputs(input)
 ```
 
-`RawEntry` also stores its `kind` and `query`. This preserves extractor context
-in persistent raw-entry stores; call `RawInput.from_raw_entry(entry)` when
-replaying a stored entry.
-
-Use `ReExtractor` to replay every entry in a raw-entry store without fetching.
-Workers are unscoped by default; set `task_kind` to replay that worker only for
-entries of one kind. Scoped workers take precedence over an unscoped fallback.
-
-```python
-reextractor = ReExtractor(
-    raw_entries,
-    [
-        ReExtractWorker(ProductExtractor(), task_kind="product-page"),
-        ReExtractWorker(FallbackExtractor()),
-    ],
-)
-items = await reextractor.run()
-```
-
-### `ScraperWorker`
-
-`ScraperWorker` composes one fetcher and one extractor. It optionally limits
-requests and reads/writes a raw-entry store. Its execution order is:
-
-```text
-check task kind → look up raw entry → (on miss) rate-limit → fetch → store → extract
-```
-
-A cache hit bypasses both the fetcher and the rate limiter. Use `task_kind` when
-a worker should only accept a particular kind of task.
-
-```python
-worker = ScraperWorker(
-    HttpxFetcher(http, base_domain="example.com"),
-    CountryExtractor(),
-    task_kind="country-page",
-    raw_entry_store=InMemoryRawEntryStore(),
-)
-result = await worker.run(Task(kind="country-page", query="https://example.com"))
-```
-
-`cache_policy` controls raw-entry reuse for `FetchRequest`s: `CachePolicy.use()` is the default,
-`CachePolicy.refresh()` replaces an existing entry, `CachePolicy.bypass()` does
-not read or write the store, and `CachePolicy.ttl(hours=24)` refetches stale
-entries. `rate_limit_key` optionally separates rate-limit grouping from the
-fetcher's base domain.
-
-### Raw-entry stores
-
-`InMemoryRawEntryStore` is the simplest option. It is process-local and is
-ideal for one program run, tests, and the browser example.
-
-`PyMongoRawEntryStore` persists raw entries in MongoDB. It has no automatic
-expiration: an entry remains until it is explicitly replaced or removed. The
-store is keyed by the request fingerprint; use JSON-serializable queries when
-relying on the default.
+`CachedFetcher` uses an `InputUrl` as its default key. Use its `read`, `write`,
+and `max_age` options to control cache behaviour.
 
 ## Examples
 
-### Browser quotes crawler
+### Quotes crawler
 
-[examples/quotes.py](examples/quotes.py) crawls quotes and author pages using
-Patchright, an in-memory raw-entry store, a rate limiter, and an in-memory task
-queue.
+[examples/quotes.py](examples/quotes.py) follows quote and author pages with a
+`JobRequest` queue. It combines the HTTP fetcher with cache and per-domain rate
+limiting. Set `MONGODB_URI` to persist documents; otherwise it uses an
+in-memory store. With MongoDB configured, extracted quote and author records
+are written to separate `quotes` and `authors` collections through
+`PyMongoRecordStore` and `RecordSink`.
 
 ```bash
-uv run --extra patchright python examples/quotes.py
+uv run python examples/quotes.py
 ```
 
-### HTTP scraper with MongoDB raw storage
+### Re-extract cached quotes
 
-[examples/mongodb/simple.py](examples/mongodb/simple.py) fetches country names
-from ScrapethisSite. On the first run it saves the raw HTML to MongoDB; later
-runs with the same task use the stored HTML instead.
+[examples/reextract.py](examples/reextract.py) runs the quote and author
+extractors over cached MongoDB documents, without making HTTP requests. It is a
+no-op with the default in-memory store because that store does not survive a
+separate process.
 
 ```bash
 docker compose -f compose.dev.yml up -d
-uv run --extra mongodb python examples/mongodb/simple.py
+MONGODB_URI=mongodb://localhost:27017 uv run --extra mongodb python examples/quotes.py
+MONGODB_URI=mongodb://localhost:27017 uv run --extra mongodb python examples/reextract.py
 ```
 
-The included [compose.dev.yml](compose.dev.yml) exposes MongoDB at
-`mongodb://localhost:27017`. Set `MONGODB_URI` to use another deployment.
-
-[examples/mongodb/reextract.py](examples/mongodb/reextract.py) reprocesses all
-stored `countries` entries with `ReExtractor`. It does not create an HTTP client
-or fetch pages, so run it after the simple example has populated MongoDB.
-
-```bash
-uv run --extra mongodb python examples/mongodb/reextract.py
-```
-
-### Browser-plugin raw input
+### Browser captures
 
 [examples/browser-plugin](examples/browser-plugin) contains a temporary Firefox
-extension and a local LinkedIn people-search/profile extractor. Its route JSON
-maps URL globs to Longscrape task kinds, so the same extension can capture other
-configured pages. `BrowserCaptureServer` registers workers by kind and exposes a
-`/captures` endpoint which turns each delivery into a `RawInput`; the flow
-therefore has no fetcher. Use it only for pages and data you are authorised to
-process.
+extension and a local receiver. `BrowserCaptureServer` turns captured HTML into
+an `InputDocument` job and passes it to the registered extractor; no fetcher is
+needed. Use it only for pages and data you are authorised to process.
 
-```python
-server = BrowserCaptureServer()
-server.register("product-page", ScraperWorker(None, ProductExtractor(), task_kind="product-page"))
-app = server.app  # run this ASGI app with Uvicorn
+```bash
+uv run uvicorn --app-dir examples/browser-plugin linkedin:app --host 127.0.0.1 --port 8765
 ```
-
-Pass `on_items` to `BrowserCaptureServer` to store, print, or otherwise consume
-the extracted entries after each capture.
-
-## Queues and crawling
-
-`Crawler` runs the queue loop for you. Register one worker for each task kind,
-then stream items as they are extracted:
-
-```python
-async with Crawler(
-    {"country-page": worker},
-    resources=[http],
-    concurrency=4,
-) as crawler:
-    async for item in crawler.stream(Task(kind="country-page", query=URL)):
-        print(item.data)
-```
-
-It enqueues child inputs, routes them by `input.kind`, and stops once all work
-is complete. `await crawler.run(seed)` is the collecting alternative. The
-equivalent `stream_inputs(...)` and `run_inputs(...)` names make it explicit
-that both `FetchRequest` and `RawInput` are accepted.
-
-Resources are never discovered from workers. Passing `resources=[http]` makes
-the context manager call their `start()` and `stop()` methods; use
-`manage_resources=False` when the caller owns a shared browser or client.
-`InMemoryTaskQueue` remains available when a custom queue is needed.
