@@ -56,3 +56,23 @@ def test_job_inputs_preserve_structured_queue_payloads() -> None:
     assert query_request.context == {"retry": 0, "priority": "normal"}
     assert isinstance(document_request.input, InputDocument)
     assert document_request.input.document is document
+
+
+def test_job_hashes_are_stable_for_all_input_types() -> None:
+    document = Document(
+        url="https://example.com/page",
+        content=b"<html></html>",
+    )
+
+    assert (
+        Job(kind="fetch", input=InputUrl("https://example.com")).hash
+        == Job(kind="fetch", input=InputUrl("https://example.com")).hash
+    )
+    assert (
+        Job(kind="search", input=InputQuery({"page": 1})).hash
+        == Job(kind="search", input=InputQuery({"page": 1})).hash
+    )
+    assert (
+        Job(kind="extract", input=InputDocument(document)).hash
+        == Job(kind="extract", input=InputDocument(document)).hash
+    )

@@ -49,7 +49,6 @@ class Transformer(Protocol):
 # TODO: in future modify stores to return handle/capability instead of random key to
 # make it easier to pass around via job queue (drastiq only accepts JSON serializable
 # data thus this will become a hard requirment at some point)
-
 # TODO: to better support reextract functionality in the future separate protocol
 # for reading would be preferable as it could fetch all of the documents by kind
 # and provide AsyncIterable which could simply plug into existing pipeline

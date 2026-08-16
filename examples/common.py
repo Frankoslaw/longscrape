@@ -19,7 +19,10 @@ def get_record_store(kind: str) -> RecordStore:
     if mongo_uri := os.getenv("MONGODB_URI"):
         from longscrape.stores import PyMongoRecordStore
 
+        print("Using MongoDB backed record store")
         return PyMongoRecordStore(kind, mongo_uri)
+
+    print("Using in memory record store")
     return InMemoryRecordStore()
 
 

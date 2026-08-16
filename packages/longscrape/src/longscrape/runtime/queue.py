@@ -11,7 +11,9 @@ class InMemoryJobQueue(JobSubmitter):
 
     async def submit(self, request: JobRequest) -> None:
         job = Job(kind=request.kind, input=request.input, context=request.context)
-        self._jobs.append(job)
+        async with self._not_empty:
+            self._jobs.append(job)
+            self._not_empty.notify()
 
     async def get(self, kind: str | None = None) -> Job:
         async with self._not_empty:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from base64 import b64encode
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TypeAlias
@@ -49,7 +50,7 @@ class Job:
     @property
     def hash(self) -> str:
         payload = json.dumps(
-            {"kind": self.kind, "input": self.input},
+            {"kind": self.kind, "input": _job_input_payload(self.input)},
             sort_keys=True,
             separators=(",", ":"),
         )
@@ -67,6 +68,25 @@ class Document:
     status: int = 200
     headers: dict[str, str] = field(default_factory=dict)
     fetched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+def _job_input_payload(input: JobInput) -> dict[str, object]:
+    if isinstance(input, InputUrl):
+        return {"type": "url", "url": input.url}
+    if isinstance(input, InputQuery):
+        return {"type": "query", "query": input.query}
+    document = input.document
+    return {
+        "type": "document",
+        "document": {
+            "url": document.url,
+            "content": b64encode(document.content).decode("ascii"),
+            "content_type": document.content_type,
+            "status": document.status,
+            "headers": document.headers,
+            "fetched_at": document.fetched_at.isoformat(),
+        },
+    }
 
 
 @dataclass(frozen=True)

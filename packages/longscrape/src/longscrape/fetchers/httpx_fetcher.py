@@ -31,6 +31,7 @@ class HttpxFetcher(Fetcher):
         yield Document(
             url=str(response.url),
             content=response.content,
+            content_type=response.headers.get("content-type", "text/html"),
             headers=dict(response.headers),
             status=response.status_code,
         )
