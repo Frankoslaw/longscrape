@@ -101,9 +101,10 @@ MONGODB_URI=mongodb://localhost:27017 uv run --extra mongodb python examples/ree
 
 [examples/browser-plugin](examples/browser-plugin) contains a temporary Firefox
 extension and a local receiver. `BrowserCaptureServer` turns captured HTML into
-an `InputDocument` job and passes it to the registered extractor; no fetcher is
+the application-defined capture handler. The handler can construct a job and
+route it to an extractor with ordinary Python control flow; no fetcher is
 needed. Use it only for pages and data you are authorised to process.
 
 ```bash
-uv run uvicorn --app-dir examples/browser-plugin linkedin:app --host 127.0.0.1 --port 8765
+uv run uvicorn --app-dir examples/browser-plugin linkedin:app --host 127.0.0.1 --port 8000
 ```
