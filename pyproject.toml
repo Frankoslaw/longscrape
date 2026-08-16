@@ -1,59 +1,52 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [project]
-name = "longscrape"
-version = "0.1.0"
+name = "longscrape-workspace"
+version = "0.2.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
-license = { text = "Big Time Public License" }
 authors = [
     { name = "Franciszek Łopuszański", email = "franopusz2006@gmail.com" }
 ]
-dependencies = [
-    "fastapi[standard]>=0.141.1",
-    "httpx>=0.28.1",
-    "parsel>=1.11.0",
-    "pydantic>=2.13.4",
-]
-
-[project.optional-dependencies]
-playwright = [
-    "playwright>=1.61.0",
-]
-patchright = [
-    "patchright>=1.61.2",
-    "playwright>=1.61.0",
-]
-stealth = [
-    "playwright>=1.61.0",
-    "playwright-stealth>=2.0.3",
-]
-mongodb = [
-    "pymongo>=4.17.0",
-]
-all = [
-    "longscrape[playwright,patchright,stealth,mongodb]",
-]
+requires-python = ">=3.14"
 
 [dependency-groups]
 dev = [
-    "numpy>=2.5.1",
+    "longscrape[all]",
+    "longscrape-core",
+    "ipykernel>=7.3.0",
+    "numpy>=2.5.2",
     "pandas>=3.0.5",
-    "pre-commit>=4.6.1",
+    "pandas-stubs>=3.0.5.260730",
+    "pre-commit>=4.6.2",
     "pyright>=1.1.411",
-    "ruff>=0.16.0",
+    "pytest>=9.1.1",
+    "ruff>=0.16.3",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/longscrape"]
+[tool.uv.workspace]
+members = [
+    "packages/longscrape_core",
+    "packages/longscrape"
+]
+
+[tool.uv.sources]
+longscrape-core = { workspace = true }
+longscrape = { workspace = true }
 
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic"
+include = [
+    "packages",
+    "examples",
+    "playbooks",
+]
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/build",
+    "**/dist",
+]
 
 [tool.ruff.lint]
 select = [

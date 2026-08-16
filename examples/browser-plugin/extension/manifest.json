@@ -5,7 +5,7 @@
   "description": "Sends configured browser routes to a local Longscrape receiver.",
   "permissions": [
     "storage",
-    "http://127.0.0.1:8765/*",
+    "http://127.0.0.1:8000/*",
     "<all_urls>"
   ],
   "background": {

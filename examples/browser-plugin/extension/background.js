@@ -1,4 +1,4 @@
-const DEFAULT_ENDPOINT = "http://127.0.0.1:8765/captures";
+const DEFAULT_ENDPOINT = "http://127.0.0.1:8000/v1/captures";
 
 browser.runtime.onMessage.addListener(async (message) => {
   if (message?.type !== "capture") return;
@@ -13,7 +13,7 @@ browser.runtime.onMessage.addListener(async (message) => {
       },
       body: JSON.stringify({
         url: message.url,
-        query: message.query,
+        context: message.context,
         kind: message.kind,
         content: message.content,
         content_type: message.content_type,
@@ -27,11 +27,16 @@ browser.runtime.onMessage.addListener(async (message) => {
     console.info("Browser capture delivered", {
       url: message.url,
       kind: message.kind,
-      items: result.items,
+      records: result.records,
     });
     return { status: succeeded ? "success" : "failure" };
   } catch (error) {
-    console.warn("Browser capture was not delivered", error);
+    console.warn(
+      `Browser capture was not delivered to ${receiverEndpoint}. Start the receiver with ` +
+      "`uv run uvicorn --app-dir examples/browser-plugin linkedin:app --host " +
+      "127.0.0.1 --port 8000`.",
+      error,
+    );
     return { status: "failure" };
   }
 });

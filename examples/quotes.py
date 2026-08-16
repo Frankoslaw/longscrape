@@ -1,130 +1,118 @@
 import asyncio
+from collections.abc import AsyncIterable, AsyncIterator
 from urllib.parse import urljoin
 
-from parsel.selector import Selector
-
+import httpx
+from common import close_store, get_document_store, get_record_store
 from longscrape import (
-    Crawler,
-    DefaultExtractor,
-    ExtractionResult,
-    FetchRequest,
-    LeakyBucketRateLimiter,
-    PipelineInput,
-    RawEntry,
-    RichEntry,
-    ScraperWorker,
+    Document,
+    Extractor,
+    InputUrl,
+    Job,
+    JobRequest,
+    JobSubmitter,
+    Record,
+    RecordSink,
 )
-from longscrape.adapters import (
-    DefaultFetcher,
-    PatchrightManager,
-    URLBlocklist,
-)
-from longscrape.adapters.playwright.middlewares import URLCacher
-from longscrape.adapters.store.in_memory import InMemoryRawEntryStore
+from longscrape.fetchers import CachedFetcher, HttpxFetcher, RateLimitedFetcher
+from longscrape.runtime import InMemoryJobQueue, LeakyBucketRateLimiter
+from longscrape_core import DISCARD_SUBMITTER
+from parsel import Selector
 
-Quote = dict[str, str]
-Author = dict[str, str]
-QUOTES_TASK_KIND = "quotes-page"
-AUTHOR_TASK_KIND = "author-page"
+QUOTES = "quotes-page"
+AUTHOR = "author-page"
 START_URL = "https://quotes.toscrape.com/page/1/"
 
 
-class QuotesExtractor(DefaultExtractor[Quote]):
-    def __init__(self):
-        super().__init__(allowed_domain="quotes.toscrape.com")
-
+class QuotesExtractor(Extractor):
     async def extract(
-        self, input: PipelineInput, raw_entry: RawEntry
-    ) -> ExtractionResult[Quote]:
-        selector = Selector(text=raw_entry.text)
-        items = [
-            RichEntry(
-                url=raw_entry.url,
-                data={
-                    "quote": quote.css(".text::text").get("").strip(),
-                    "author": quote.css(".author::text").get("").strip(),
-                },
-            )
-            for quote in selector.css(".quote")
-        ]
-        tasks = [
-            input.spawn(kind=AUTHOR_TASK_KIND, query=urljoin(raw_entry.url, about_href))
-            for about_href in selector.css(
-                ".quote a[href*='/author/']::attr(href)"
-            ).getall()
-        ]
-        if next_href := selector.css(".pager .next a::attr(href)").get():
-            tasks.append(
-                input.spawn(
-                    kind=QUOTES_TASK_KIND, query=urljoin(raw_entry.url, next_href)
-                )
-            )
-        return ExtractionResult(items=items, tasks=tasks)
-
-
-class AuthorExtractor(DefaultExtractor[Author]):
-    def __init__(self):
-        super().__init__(allowed_domain="quotes.toscrape.com")
-
-    async def extract(
-        self, input: PipelineInput, raw_entry: RawEntry
-    ) -> ExtractionResult[Author]:
-        selector = Selector(text=raw_entry.text)
-        return ExtractionResult(
-            items=[
-                RichEntry(
-                    url=raw_entry.url,
+        self,
+        documents: AsyncIterable[Document],
+        job: Job,
+        submitter: JobSubmitter = DISCARD_SUBMITTER,
+    ) -> AsyncIterator[Record]:
+        async for document in documents:
+            page = Selector(text=document.content.decode(errors="replace"))
+            for quote in page.css(".quote"):
+                yield Record(
+                    kind="quote",
                     data={
-                        "name": selector.css(".author-title::text").get("").strip(),
-                        "born_date": selector.css(".author-born-date::text")
-                        .get("")
-                        .strip(),
-                        "born_location": selector.css(".author-born-location::text")
-                        .get("")
-                        .strip(),
+                        "quote": quote.css(".text::text").get("").strip(),
+                        "author": quote.css(".author::text").get("").strip(),
                     },
                 )
-            ],
-            tasks=[],
-        )
+            for href in page.css(".quote a[href*='/author/']::attr(href)").getall():
+                await submitter.submit(
+                    JobRequest(AUTHOR, InputUrl(urljoin(document.url, href)))
+                )
+            if href := page.css(".pager .next a::attr(href)").get():
+                await submitter.submit(
+                    JobRequest(QUOTES, InputUrl(urljoin(document.url, href)))
+                )
+
+
+class AuthorExtractor(Extractor):
+    async def extract(
+        self,
+        documents: AsyncIterable[Document],
+        job: Job,
+        submitter: JobSubmitter = DISCARD_SUBMITTER,
+    ) -> AsyncIterator[Record]:
+        async for document in documents:
+            page = Selector(text=document.content.decode(errors="replace"))
+            yield Record(
+                kind="author",
+                data={
+                    "name": page.css(".author-title::text").get("").strip(),
+                    "born_date": page.css(".author-born-date::text").get("").strip(),
+                    "born_location": page.css(".author-born-location::text")
+                    .get("")
+                    .strip(),
+                },
+            )
 
 
 async def main() -> None:
-    playwright = PatchrightManager(headless=False)
-    playwright.register_middleware(URLBlocklist())
-    playwright.register_middleware(URLCacher())
+    job_queue = InMemoryJobQueue()
+    await job_queue.submit(JobRequest(QUOTES, InputUrl(START_URL)))
 
-    fetcher = DefaultFetcher(playwright, "quotes.toscrape.com")
-    raw_entries = InMemoryRawEntryStore()
-    rate_limiter = LeakyBucketRateLimiter(requests_per_second=0.5)
+    quotes_extractor = QuotesExtractor()
+    author_extractor = AuthorExtractor()
 
-    workers = {
-        QUOTES_TASK_KIND: ScraperWorker(
-            fetcher,
-            QuotesExtractor(),
-            task_kind=QUOTES_TASK_KIND,
-            rate_limiter=rate_limiter,
-            raw_entry_store=raw_entries,
-        ),
-        AUTHOR_TASK_KIND: ScraperWorker(
-            fetcher,
-            AuthorExtractor(),
-            task_kind=AUTHOR_TASK_KIND,
-            rate_limiter=rate_limiter,
-            raw_entry_store=raw_entries,
-        ),
-    }
+    quote_store = get_record_store("quotes")
+    author_store = get_record_store("authors")
+    quote_sink = RecordSink(quote_store)
+    author_sink = RecordSink(author_store)
 
-    async with Crawler(workers, resources=[playwright]) as crawler:
-        async for item in crawler.stream_inputs(
-            FetchRequest(kind=QUOTES_TASK_KIND, query=START_URL)
-        ):
-            if "quote" in item.data:
-                print(
-                    f"[{item.url}] {item.data['author']}: {item.data['quote'][:35]}..."
-                )
-            else:
-                print(f"[{item.url}] author: {item.data['name']}")
+    async with httpx.AsyncClient(follow_redirects=True) as http:
+        document_store = get_document_store()
+
+        httpx_fetcher = HttpxFetcher(http)
+        rate_limited_fetcher = RateLimitedFetcher(
+            httpx_fetcher,
+            LeakyBucketRateLimiter(requests_per_second=2),
+        )
+        cached_fetcher = CachedFetcher(rate_limited_fetcher, document_store)
+        fetcher = cached_fetcher
+
+        try:
+            while not job_queue.empty():
+                job = await job_queue.get()
+                documents = fetcher.fetch(job, job_queue)
+
+                if job.kind == QUOTES:
+                    records = quotes_extractor.extract(documents, job, job_queue)
+                    async for _ in quote_sink.transform(records, job, job_queue):
+                        pass
+                elif job.kind == AUTHOR:
+                    records = author_extractor.extract(documents, job, job_queue)
+                    async for _ in author_sink.transform(records, job, job_queue):
+                        pass
+
+        finally:
+            await close_store(document_store)
+            await close_store(quote_store)
+            await close_store(author_store)
 
 
 if __name__ == "__main__":

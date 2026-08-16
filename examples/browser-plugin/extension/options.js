@@ -1,4 +1,4 @@
-const DEFAULT_ENDPOINT = "http://127.0.0.1:8765/captures";
+const DEFAULT_ENDPOINT = "http://127.0.0.1:8000/v1/captures";
 const form = document.getElementById("settings");
 const endpoint = document.getElementById("receiverEndpoint");
 const routes = document.getElementById("routes");

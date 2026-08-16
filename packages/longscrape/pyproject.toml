@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "longscrape"
+version = "0.2.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Franciszek Łopuszański", email = "franopusz2006@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "longscrape-core",
+    "httpx>=0.28.1",
+    "parsel>=1.11.0",
+]
+
+[project.optional-dependencies]
+playwright = [
+    "playwright>=1.61.0",
+]
+patchright = [
+    "patchright>=1.61.2",
+    "playwright>=1.61.0",
+]
+stealth = [
+    "playwright>=1.61.0",
+    "playwright-stealth>=2.0.3",
+]
+mongodb = [
+    "pymongo>=4.17.0",
+]
+browser-capture = [
+    "pydantic>=2.13.4",
+    "fastapi[standard]>=0.141.1",
+]
+all = [
+    "longscrape[playwright,patchright,stealth,mongodb,browser-capture]",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/longscrape"]
