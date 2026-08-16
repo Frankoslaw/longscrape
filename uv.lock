@@ -616,19 +616,23 @@ name = "longscrape"
 version = "0.1.0"
 source = { editable = "packages/longscrape" }
 dependencies = [
-    { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
     { name = "longscrape-core" },
     { name = "parsel" },
-    { name = "pydantic" },
 ]
 
 [package.optional-dependencies]
 all = [
+    { name = "fastapi", extra = ["standard"] },
     { name = "patchright" },
     { name = "playwright" },
     { name = "playwright-stealth" },
+    { name = "pydantic" },
     { name = "pymongo" },
+]
+browser-capture = [
+    { name = "fastapi", extra = ["standard"] },
+    { name = "pydantic" },
 ]
 mongodb = [
     { name = "pymongo" },
@@ -647,9 +651,9 @@ stealth = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi", extras = ["standard"], specifier = ">=0.141.1" },
+    { name = "fastapi", extras = ["standard"], marker = "extra == 'browser-capture'", specifier = ">=0.141.1" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "longscrape", extras = ["playwright", "patchright", "stealth", "mongodb"], marker = "extra == 'all'", editable = "packages/longscrape" },
+    { name = "longscrape", extras = ["playwright", "patchright", "stealth", "mongodb", "browser-capture"], marker = "extra == 'all'", editable = "packages/longscrape" },
     { name = "longscrape-core", editable = "packages/longscrape_core" },
     { name = "parsel", specifier = ">=1.11.0" },
     { name = "patchright", marker = "extra == 'patchright'", specifier = ">=1.61.2" },
@@ -657,10 +661,10 @@ requires-dist = [
     { name = "playwright", marker = "extra == 'playwright'", specifier = ">=1.61.0" },
     { name = "playwright", marker = "extra == 'stealth'", specifier = ">=1.61.0" },
     { name = "playwright-stealth", marker = "extra == 'stealth'", specifier = ">=2.0.3" },
-    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pydantic", marker = "extra == 'browser-capture'", specifier = ">=2.13.4" },
     { name = "pymongo", marker = "extra == 'mongodb'", specifier = ">=4.17.0" },
 ]
-provides-extras = ["playwright", "patchright", "stealth", "mongodb", "all"]
+provides-extras = ["playwright", "patchright", "stealth", "mongodb", "browser-capture", "all"]
 
 [[package]]
 name = "longscrape-core"

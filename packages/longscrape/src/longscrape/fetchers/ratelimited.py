@@ -9,7 +9,7 @@ from longscrape_core import (
     JobSubmitter,
 )
 
-from longscrape.adapters.ratelimit import RateLimiter
+from longscrape.runtime.rate_limit import RateLimiter
 
 
 def _url_key(job: Job) -> str:

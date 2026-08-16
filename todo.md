@@ -1,5 +1,5 @@
 - [ ] Browser capture server should not be coupled to fastapi
-- [ ] Some features that should be optional are part of the core
+- [x] Some features that should be optional are part of the core
 - [ ] Users should be able to use both uv run and python -m for examples or other aspects which currently doesn't work
 - [ ] There needs to be some cleaner error propagation system
   - [ ] Optional hooks for traceability like OTEL
@@ -15,9 +15,10 @@
   - [ ] golden tests to detect regressions
   - [ ] integration tests to test different request managers
 - [x] Replace pyre with pyright
-- [ ] Implement built in deduping and utils
-- [ ] Implement optional generic rich entry store
-- [ ] Refine worker construction via builder pattern as rate_limiter, store or hooks are optional
+- [x] Implement built in deduping and utils
+- [x] Implement optional generic rich entry store (NOT PLANNED FOR NOW)
+- [x] Refine worker construction via builder pattern as rate_limiter, store or hooks are optional
+  - Replaced via simple function composition and in future longscrape-scrapy orchestration
 - [ ] Detect status codes like 429, 503 as special cases for rate limiter:
   - [ ] reduce frequency on service down 503
   - [ ] exponential backoff on to many requests 429

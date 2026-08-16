@@ -4,8 +4,8 @@ from collections.abc import AsyncIterator
 
 from common import close_store, get_document_store, get_record_store
 from longscrape import Document, InputUrl, JobRequest, RecordSink
-from longscrape.adapters import InMemoryDocumentStore
-from longscrape.core.domain.queue import InMemoryJobQueue
+from longscrape.runtime import InMemoryJobQueue
+from longscrape.stores import InMemoryDocumentStore
 from quotes import (
     AUTHOR,
     QUOTES,
@@ -40,6 +40,7 @@ async def main() -> None:
 
     quote_store = get_record_store("quotes")
     author_store = get_record_store("authors")
+
     quote_sink = RecordSink(quote_store)
     author_sink = RecordSink(author_store)
 

@@ -7,9 +7,9 @@ from typing import TypedDict, cast
 
 from playwright.async_api import Route
 
-from longscrape.core.ports.playwright import PlaywrightMiddlewarePort
-from longscrape.core.ports.ratelimit import RateLimiter
+from longscrape.browser._protocols import PlaywrightMiddleware
 from longscrape.logging import get_logger
+from longscrape.runtime.rate_limit import RateLimiter
 
 logger = get_logger(__name__)
 
@@ -32,7 +32,7 @@ def _write_cache(path: str, data: CacheData) -> None:
         json.dump(data, cache_file, ensure_ascii=False, indent=2)
 
 
-class ContentTypeBlocklist(PlaywrightMiddlewarePort):
+class ContentTypeBlocklist(PlaywrightMiddleware):
     def __init__(self, blocked_types: list[str] | None = None, verbose: bool = False):
         self.blocked_types = blocked_types or ["stylesheet", "font"]
         self.verbose = verbose
@@ -49,7 +49,7 @@ class ContentTypeBlocklist(PlaywrightMiddlewarePort):
         return False
 
 
-class URLBlocklist(PlaywrightMiddlewarePort):
+class URLBlocklist(PlaywrightMiddleware):
     def __init__(self, blocklist: list[str] | None = None, verbose: bool = False):
         self.blocklist = blocklist or [
             "google-analytics.com",
@@ -75,7 +75,7 @@ class URLBlocklist(PlaywrightMiddlewarePort):
         return False
 
 
-class URLCacher(PlaywrightMiddlewarePort):
+class URLCacher(PlaywrightMiddleware):
     def __init__(
         self,
         cache_dir: str = CACHE_DIR,
@@ -141,7 +141,7 @@ class URLCacher(PlaywrightMiddlewarePort):
             return True
 
 
-class PlaywrightRateLimiterMiddleware(PlaywrightMiddlewarePort):
+class PlaywrightRateLimiterMiddleware(PlaywrightMiddleware):
     def __init__(self, rate_limiter: RateLimiter):
         self.rate_limiter = rate_limiter
 

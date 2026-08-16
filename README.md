@@ -44,7 +44,7 @@ they are available.
 import httpx
 
 from longscrape import InputUrl, Job
-from longscrape.adapters import HttpxFetcher
+from longscrape.fetchers import HttpxFetcher
 
 job = Job("article", InputUrl("https://example.com/article"))
 async with httpx.AsyncClient() as http:

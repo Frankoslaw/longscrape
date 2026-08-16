@@ -9,11 +9,11 @@ from longscrape_core import (
     JobSubmitter,
 )
 
-from longscrape.core.ports.playwright import PlaywrightManagerPort
+from longscrape.browser._protocols import PlaywrightManager
 
 
 class PlaywrightFetcher(Fetcher):
-    def __init__(self, playwright: PlaywrightManagerPort) -> None:
+    def __init__(self, playwright: PlaywrightManager) -> None:
         self._playwright = playwright
 
     async def fetch(

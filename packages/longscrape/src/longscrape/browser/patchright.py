@@ -2,7 +2,7 @@ from typing import Any
 
 from patchright.async_api import async_playwright
 
-from longscrape.adapters.playwright.playwright import PlaywrightManager
+from longscrape.browser.playwright import PlaywrightManager
 
 
 class PatchrightManager(PlaywrightManager):

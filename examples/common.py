@@ -1,21 +1,23 @@
 import os
 
 from longscrape import DocumentStore, RecordStore
-from longscrape.adapters import InMemoryDocumentStore, InMemoryRecordStore
+from longscrape.stores import InMemoryDocumentStore, InMemoryRecordStore
 
 
 def get_document_store() -> DocumentStore:
     if mongo_uri := os.getenv("MONGODB_URI"):
-        from longscrape.adapters import PyMongoDocumentStore
+        from longscrape.stores import PyMongoDocumentStore
 
+        print("Using MongoDB backed document store")
         return PyMongoDocumentStore(mongo_uri)
 
+    print("Using in memory document store")
     return InMemoryDocumentStore()
 
 
 def get_record_store(kind: str) -> RecordStore:
     if mongo_uri := os.getenv("MONGODB_URI"):
-        from longscrape.adapters import PyMongoRecordStore
+        from longscrape.stores import PyMongoRecordStore
 
         return PyMongoRecordStore(kind, mongo_uri)
     return InMemoryRecordStore()

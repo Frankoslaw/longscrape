@@ -10,10 +10,8 @@ from playwright.async_api import (
     async_playwright,
 )
 
-from longscrape.core.ports.playwright import (
-    PlaywrightManagerPort,
-    PlaywrightMiddlewarePort,
-)
+from longscrape.browser._protocols import PlaywrightManager as PlaywrightManagerProtocol
+from longscrape.browser._protocols import PlaywrightMiddleware
 
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -21,11 +19,11 @@ USER_AGENT = (
 )
 
 
-class PlaywrightManager(PlaywrightManagerPort):
+class PlaywrightManager(PlaywrightManagerProtocol):
     def __init__(self, headless: bool = True, proxy: str | None = None):
         self.headless = headless
         self.proxy = proxy
-        self.middlewares: list[PlaywrightMiddlewarePort] = []
+        self.middlewares: list[PlaywrightMiddleware] = []
 
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
@@ -78,5 +76,5 @@ class PlaywrightManager(PlaywrightManagerPort):
         page = await self._context.new_page()
         return page
 
-    def register_middleware(self, middleware: PlaywrightMiddlewarePort):
+    def register_middleware(self, middleware: PlaywrightMiddleware) -> None:
         self.middlewares.append(middleware)

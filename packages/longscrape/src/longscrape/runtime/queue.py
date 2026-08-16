@@ -1,7 +1,7 @@
 import asyncio
 from collections import deque
 
-from longscrape_core import Job, JobSubmitter, JobRequest
+from longscrape_core import Job, JobRequest, JobSubmitter
 
 
 class InMemoryJobQueue(JobSubmitter):

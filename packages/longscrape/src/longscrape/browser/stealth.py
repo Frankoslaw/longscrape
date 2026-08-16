@@ -1,15 +1,12 @@
 from playwright.async_api import Page
 from playwright_stealth import Stealth
 
-from longscrape.adapters.playwright.playwright import USER_AGENT
-from longscrape.core.ports.playwright import (
-    PlaywrightManagerPort,
-    PlaywrightMiddlewarePort,
-)
+from longscrape.browser._protocols import PlaywrightManager, PlaywrightMiddleware
+from longscrape.browser.playwright import USER_AGENT
 
 
-class StealthPlaywrightManagerAdapter(PlaywrightManagerPort):
-    def __init__(self, manager: PlaywrightManagerPort):
+class StealthPlaywrightManagerAdapter(PlaywrightManager):
+    def __init__(self, manager: PlaywrightManager):
         self._manager = manager
         self._stealth = Stealth(navigator_user_agent_override=USER_AGENT)
 
@@ -28,5 +25,5 @@ class StealthPlaywrightManagerAdapter(PlaywrightManagerPort):
             raise
         return page
 
-    def register_middleware(self, middleware: PlaywrightMiddlewarePort) -> None:
+    def register_middleware(self, middleware: PlaywrightMiddleware) -> None:
         self._manager.register_middleware(middleware)

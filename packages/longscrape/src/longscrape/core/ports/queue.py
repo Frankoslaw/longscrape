@@ -1,9 +1,0 @@
-from typing import Protocol
-
-from longscrape_core import Job, JobRequest
-
-
-class JobQueue(Protocol):
-    async def submit(self, request: JobRequest) -> None: ...
-    async def get(self, kind: str | None = None) -> Job: ...
-    def empty(self, kind: str | None = None) -> bool: ...

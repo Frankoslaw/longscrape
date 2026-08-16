@@ -5,20 +5,17 @@ from urllib.parse import urljoin
 import httpx
 from common import close_store, get_document_store, get_record_store
 from longscrape import (
-    CachedFetcher,
     Document,
     Extractor,
     InputUrl,
     Job,
     JobRequest,
     JobSubmitter,
-    LeakyBucketRateLimiter,
-    RateLimitedFetcher,
     Record,
     RecordSink,
 )
-from longscrape.adapters import HttpxFetcher
-from longscrape.core.domain.queue import InMemoryJobQueue
+from longscrape.fetchers import CachedFetcher, HttpxFetcher, RateLimitedFetcher
+from longscrape.runtime import InMemoryJobQueue, LeakyBucketRateLimiter
 from longscrape_core import DISCARD_SUBMITTER
 from parsel import Selector
 
@@ -91,11 +88,12 @@ async def main() -> None:
         document_store = get_document_store()
 
         httpx_fetcher = HttpxFetcher(http)
-        cached_fetcher = CachedFetcher(httpx_fetcher, document_store)
-        fetcher = RateLimitedFetcher(
-            cached_fetcher,
+        rate_limited_fetcher = RateLimitedFetcher(
+            httpx_fetcher,
             LeakyBucketRateLimiter(requests_per_second=2),
         )
+        cached_fetcher = CachedFetcher(rate_limited_fetcher, document_store)
+        fetcher = cached_fetcher
 
         try:
             while not job_queue.empty():

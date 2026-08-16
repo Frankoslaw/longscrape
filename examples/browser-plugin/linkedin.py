@@ -17,8 +17,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import close_store, get_record_store
 from longscrape import (
     DISCARD_SUBMITTER,
-    BrowserCapture,
-    BrowserCaptureServer,
     Document,
     Extractor,
     InputDocument,
@@ -26,6 +24,7 @@ from longscrape import (
     JobSubmitter,
     Record,
 )
+from longscrape.capture import BrowserCapture, BrowserCaptureServer
 from parsel import Selector
 
 SEARCH_KIND = "linkedin.people-search"
