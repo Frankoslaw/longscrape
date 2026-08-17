@@ -23,7 +23,7 @@ def _url_key(job: Job) -> str:
 class CachedFetcher:
     def __init__(
         self,
-        fetcher: Fetcher,
+        fetcher: Fetcher | None,
         store: DocumentStore,
         *,
         cache_key: Callable[[Job], str] = _url_key,
@@ -46,6 +46,9 @@ class CachedFetcher:
         cached = await self._store.load(self._cache_key(job)) if self._read else None
         if cached is not None and self._is_fresh(cached):
             yield cached
+            return
+
+        if self._fetcher is None:
             return
 
         async for document in self._fetcher.fetch(job, submitter):

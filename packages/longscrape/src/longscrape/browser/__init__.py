@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from longscrape.browser.config import BrowserConfig
+    from longscrape.browser.handoff import ManualHandoff
     from longscrape.browser.manager import BrowserManager
     from longscrape.browser.middlewares import (
         ContentTypeBlocklist,
@@ -29,6 +30,7 @@ __all__ = [
     "PlaywrightBrowserProvider",
     "PlaywrightManager",
     "PlaywrightRateLimiterMiddleware",
+    "ManualHandoff",
     "URLBlocklist",
     "URLCacher",
 ]
@@ -36,6 +38,7 @@ __all__ = [
 _MODULES = {
     "BrowserConfig": "longscrape.browser.config",
     "BrowserManager": "longscrape.browser.manager",
+    "ManualHandoff": "longscrape.browser.handoff",
     "BrowserProvider": "longscrape.browser.provider",
     "ContentTypeBlocklist": "longscrape.browser.middlewares",
     "PlaywrightBrowserProvider": "longscrape.browser.provider",

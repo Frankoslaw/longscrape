@@ -16,6 +16,7 @@ from typing import Any
 from longscrape import Document, Extractor, InputUrl, Job, JobSubmitter, Record
 from longscrape.browser import BrowserConfig, BrowserManager
 from longscrape.fetchers import BrowserFetcher
+from longscrape.runtime import Flow
 from longscrape_core import DISCARD_SUBMITTER
 from parsel import Selector
 
@@ -84,7 +85,7 @@ async def main() -> None:
     await browser.start()
     try:
         job = Job("quotes", InputUrl("https://quotes.toscrape.com/js-delayed/"))
-        records = extractor.extract(fetcher.fetch(job), job)
+        records = Flow().fetch(fetcher).extract(extractor).build()(job)
         quote_count = 0
         async for record in records:
             quote_count += 1

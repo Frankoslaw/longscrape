@@ -1,7 +1,10 @@
 """Public domain types and pipeline contracts for longscrape."""
 
 from longscrape_core.domain import (
+    BrowserHandoffRequired,
     Document,
+    FetchFailure,
+    FetchFailureKind,
     InputDocument,
     InputQuery,
     InputUrl,
@@ -11,6 +14,7 @@ from longscrape_core.domain import (
     JsonScalar,
     JsonValue,
     Record,
+    RetryableFetchFailure,
 )
 from longscrape_core.ports import (
     DISCARD_SUBMITTER,
@@ -23,8 +27,11 @@ from longscrape_core.ports import (
 
 __all__ = [
     "DISCARD_SUBMITTER",
+    "BrowserHandoffRequired",
     "Document",
     "Extractor",
+    "FetchFailure",
+    "FetchFailureKind",
     "Fetcher",
     "InputDocument",
     "InputQuery",
@@ -37,5 +44,6 @@ __all__ = [
     "JsonValue",
     "NullJobSubmitter",
     "Record",
+    "RetryableFetchFailure",
     "Transformer",
 ]

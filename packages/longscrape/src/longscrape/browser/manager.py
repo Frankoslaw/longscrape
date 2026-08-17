@@ -29,17 +29,22 @@ class BrowserManager:
         await self.provider.start()
         browser = await self.provider.launch_browser()
         self._browser = browser
+        self._context = await self._new_context()
 
+    async def _new_context(self, *, storage_state: Any | None = None) -> Any:
+        if self._browser is None:
+            raise RuntimeError("Browser is not initialized. Call start() first.")
         options = {
             "user_agent": USER_AGENT,
             **self.config.context_options,
         }
+        if storage_state is not None:
+            options["storage_state"] = storage_state
         if self.proxy:
             options["proxy"] = {"server": self.proxy}
             options["ignore_https_errors"] = True
 
-        context = await browser.new_context(**options)
-        self._context = context
+        context = await self._browser.new_context(**options)
 
         if self.middlewares:
 
@@ -50,6 +55,7 @@ class BrowserManager:
                 await route.continue_()
 
             await context.route("**/*", pipeline_runner)
+        return context
 
     async def stop(self) -> None:
         if self._context:
@@ -64,6 +70,29 @@ class BrowserManager:
                 "Browser context is not initialized. Call start() before create_page()."
             )
         return await self._context.new_page()
+
+    async def storage_state(self) -> Any:
+        if self._context is None:
+            raise RuntimeError(
+                "Browser context is not initialized. "
+                "Call start() before storage_state()."
+            )
+        return await self._context.storage_state()
+
+    async def replace_context(self, *, storage_state: Any) -> None:
+        """Replace the active context while preserving manager configuration."""
+        previous_context = self._context
+        self._context = await self._new_context(storage_state=storage_state)
+        if previous_context is not None:
+            await previous_context.close()
+
+    async def launch_handoff_browser(self) -> Any:
+        if self._browser is None:
+            raise RuntimeError(
+                "Browser is not initialized. "
+                "Call start() before launch_handoff_browser()."
+            )
+        return await self._browser.browser_type.launch(headless=False)
 
     def register_middleware(self, middleware: BrowserMiddleware) -> None:
         self.middlewares.append(middleware)

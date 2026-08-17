@@ -5,7 +5,8 @@ import json
 import uuid
 from base64 import b64encode
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from enum import Enum
 from typing import TypeAlias
 
 JsonScalar: TypeAlias = str | int | float | bool | None
@@ -103,3 +104,36 @@ class Record:
             separators=(",", ":"),
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+# Failure domain objects
+# TODO: How should more generalized failures be handled for other parts of pipeline
+# as currently all of them would result in abort. Also the notion of Recovery object
+# is interesting to introduce Retry, Pause and Fail where Pause would be for example
+# used for manual handoff after which it would become Fail if not synced.
+class FetchFailureKind(Enum):
+    NETWORK = "network"
+    TIMEOUT = "timeout"
+    HTTP_STATUS = "http_status"
+    RATE_LIMITED = "rate_limited"
+    BLOCKED = "blocked"
+    INVALID_INPUT = "invalid_input"
+
+
+@dataclass(frozen=True)
+class FetchFailure(Exception):
+    kind: FetchFailureKind
+    message: str
+    url: str | None = None
+    status: int | None = None
+    retry_after: timedelta | None = None
+    cause: Exception | None = None
+
+    def __str__(self) -> str:
+        return self.message
+
+
+class RetryableFetchFailure(FetchFailure): ...
+
+
+class BrowserHandoffRequired(FetchFailure): ...
