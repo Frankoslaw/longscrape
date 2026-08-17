@@ -1,0 +1,1 @@
+- Browser provider design is analogous to one provided by scrapy-playwright library: https://github.com/scrapy-plugins/scrapy-playwright/blob/main/docs/pluggable-browser-providers.md

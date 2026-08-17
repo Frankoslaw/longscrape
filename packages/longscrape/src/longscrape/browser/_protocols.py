@@ -1,15 +1,19 @@
-from typing import TYPE_CHECKING, Protocol
-
-if TYPE_CHECKING:
-    from playwright.async_api import Page, Route
+from typing import Any, Protocol
 
 
-class PlaywrightMiddleware(Protocol):
-    async def handle(self, route: "Route") -> bool: ...
+class BrowserMiddleware(Protocol):
+    """Handle a Playwright-compatible route."""
+
+    async def handle(self, route: Any) -> bool: ...
 
 
-class PlaywrightManager(Protocol):
+class BrowserManagerProtocol(Protocol):
     async def start(self) -> None: ...
     async def stop(self) -> None: ...
-    async def create_page(self) -> "Page": ...
-    def register_middleware(self, middleware: PlaywrightMiddleware) -> None: ...
+    async def create_page(self) -> Any: ...
+    def register_middleware(self, middleware: BrowserMiddleware) -> None: ...
+
+
+# Compatibility names for applications that used the old manager API.
+PlaywrightMiddleware = BrowserMiddleware
+PlaywrightManager = BrowserManagerProtocol

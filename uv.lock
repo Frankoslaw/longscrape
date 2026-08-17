@@ -624,11 +624,12 @@ dependencies = [
 [package.optional-dependencies]
 all = [
     { name = "fastapi", extra = ["standard"] },
-    { name = "patchright" },
     { name = "playwright" },
-    { name = "playwright-stealth" },
     { name = "pydantic" },
     { name = "pymongo" },
+]
+browser = [
+    { name = "playwright" },
 ]
 browser-capture = [
     { name = "fastapi", extra = ["standard"] },
@@ -637,34 +638,19 @@ browser-capture = [
 mongodb = [
     { name = "pymongo" },
 ]
-patchright = [
-    { name = "patchright" },
-    { name = "playwright" },
-]
-playwright = [
-    { name = "playwright" },
-]
-stealth = [
-    { name = "playwright" },
-    { name = "playwright-stealth" },
-]
 
 [package.metadata]
 requires-dist = [
     { name = "fastapi", extras = ["standard"], marker = "extra == 'browser-capture'", specifier = ">=0.141.1" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "longscrape", extras = ["playwright", "patchright", "stealth", "mongodb", "browser-capture"], marker = "extra == 'all'", editable = "packages/longscrape" },
+    { name = "longscrape", extras = ["browser", "browser-capture", "mongodb"], marker = "extra == 'all'", editable = "packages/longscrape" },
     { name = "longscrape-core", editable = "packages/longscrape_core" },
     { name = "parsel", specifier = ">=1.11.0" },
-    { name = "patchright", marker = "extra == 'patchright'", specifier = ">=1.61.2" },
-    { name = "playwright", marker = "extra == 'patchright'", specifier = ">=1.61.0" },
-    { name = "playwright", marker = "extra == 'playwright'", specifier = ">=1.61.0" },
-    { name = "playwright", marker = "extra == 'stealth'", specifier = ">=1.61.0" },
-    { name = "playwright-stealth", marker = "extra == 'stealth'", specifier = ">=2.0.3" },
+    { name = "playwright", marker = "extra == 'browser'", specifier = ">=1.61.0" },
     { name = "pydantic", marker = "extra == 'browser-capture'", specifier = ">=2.13.4" },
     { name = "pymongo", marker = "extra == 'mongodb'", specifier = ">=4.17.0" },
 ]
-provides-extras = ["playwright", "patchright", "stealth", "mongodb", "browser-capture", "all"]
+provides-extras = ["browser", "browser-capture", "mongodb", "all"]
 
 [[package]]
 name = "longscrape-core"
@@ -684,6 +670,7 @@ dev = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pandas-stubs" },
+    { name = "patchright" },
     { name = "pre-commit" },
     { name = "pyright" },
     { name = "pytest" },
@@ -700,6 +687,7 @@ dev = [
     { name = "numpy", specifier = ">=2.5.2" },
     { name = "pandas", specifier = ">=3.0.5" },
     { name = "pandas-stubs", specifier = ">=3.0.5.260730" },
+    { name = "patchright", specifier = ">=1.61.2" },
     { name = "pre-commit", specifier = ">=4.6.2" },
     { name = "pyright", specifier = ">=1.1.411" },
     { name = "pytest", specifier = ">=9.1.1" },
@@ -1014,18 +1002,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/81/22/af5d926fc2c32a339eec00a443644bc40ab9db1dd2dd9017873c59773c0c/playwright-1.62.0-py3-none-win32.whl", hash = "sha256:e5614fa89355d7081457680324bb219f79f69c423c5cb6fa250e30b0d8aebf1c", size = 38164450, upload-time = "2026-07-31T17:01:04.187Z" },
     { url = "https://files.pythonhosted.org/packages/2b/a9/4160c1033c07af98bf841ad079457dd78408a5ee0dd56cbfe50b8b6a1c22/playwright-1.62.0-py3-none-win_amd64.whl", hash = "sha256:92c0d98ed04eb35af557b709875edba415b1f548bdb22ddb5bb3e1e6c835c2f1", size = 38164458, upload-time = "2026-07-31T17:01:08.459Z" },
     { url = "https://files.pythonhosted.org/packages/6c/ec/06b55d619a7082a766aa04f2c6bb31435c87f02930087d8a0517119408fa/playwright-1.62.0-py3-none-win_arm64.whl", hash = "sha256:ea8d3055aa9d5a9f1832ac82517bd8b42c78fac7ebcbebb0107116735c8cb6a1", size = 34208868, upload-time = "2026-07-31T17:01:11.818Z" },
-]
-
-[[package]]
-name = "playwright-stealth"
-version = "2.0.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "playwright" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a4/db/6ade5d539c7d151b9defc78fafa8b65aa52352617d0e7699b47008bd801f/playwright_stealth-2.0.3.tar.gz", hash = "sha256:1d8e488fbdd8f190f1269ea8cf5d57d14df3a9f1af1001c41ee3588b2aac3133", size = 25751, upload-time = "2026-04-04T02:50:33.88Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/10/607c409712c02a26c4cb794820514cb7fdaaeac15fb05bed917fb8a354b3/playwright_stealth-2.0.3-py3-none-any.whl", hash = "sha256:1887ade423ab7ff8ae16d363a30a38de0b5817e1e4a29d47b74bf3a0e3dbfcb4", size = 34385, upload-time = "2026-04-04T02:50:35.246Z" },
 ]
 
 [[package]]

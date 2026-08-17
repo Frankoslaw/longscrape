@@ -18,26 +18,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-playwright = [
+browser = [
     "playwright>=1.61.0",
-]
-patchright = [
-    "patchright>=1.61.2",
-    "playwright>=1.61.0",
-]
-stealth = [
-    "playwright>=1.61.0",
-    "playwright-stealth>=2.0.3",
-]
-mongodb = [
-    "pymongo>=4.17.0",
 ]
 browser-capture = [
     "pydantic>=2.13.4",
     "fastapi[standard]>=0.141.1",
 ]
+mongodb = [
+    "pymongo>=4.17.0",
+]
 all = [
-    "longscrape[playwright,patchright,stealth,mongodb,browser-capture]",
+    "longscrape[browser,browser-capture,mongodb]",
 ]
 
 [tool.hatch.build.targets.wheel]

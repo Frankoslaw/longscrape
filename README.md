@@ -29,10 +29,14 @@ uv sync
 Optional adapters:
 
 ```bash
-uv sync --extra playwright  # browser fetcher
-uv sync --extra patchright  # Patchright browser support
+uv sync --extra browser  # built-in Playwright browser provider
 uv sync --extra mongodb     # MongoDB document store
 ```
+
+Browser implementations are pluggable: install a compatible library such as
+Patchright or Camoufox in your application, then pass its provider to
+`BrowserManager`. Longscrape does not declare or version-pin those libraries.
+See [the Patchright example](examples/custom_browser.py).
 
 ## A pipeline
 
