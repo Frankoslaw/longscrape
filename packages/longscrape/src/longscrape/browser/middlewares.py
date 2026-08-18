@@ -3,11 +3,9 @@ import base64
 import hashlib
 import json
 import os
-from typing import TypedDict, cast
+from typing import Any, TypedDict, cast
 
-from playwright.async_api import Route
-
-from longscrape.browser._protocols import PlaywrightMiddleware
+from longscrape.browser._protocols import BrowserMiddleware
 from longscrape.logging import get_logger
 from longscrape.runtime.rate_limit import RateLimiter
 
@@ -32,12 +30,12 @@ def _write_cache(path: str, data: CacheData) -> None:
         json.dump(data, cache_file, ensure_ascii=False, indent=2)
 
 
-class ContentTypeBlocklist(PlaywrightMiddleware):
+class ContentTypeBlocklist(BrowserMiddleware):
     def __init__(self, blocked_types: list[str] | None = None, verbose: bool = False):
         self.blocked_types = blocked_types or ["stylesheet", "font"]
         self.verbose = verbose
 
-    async def handle(self, route: Route) -> bool:
+    async def handle(self, route: Any) -> bool:
         resource_type = route.request.resource_type
         if resource_type in self.blocked_types:
             if self.verbose:
@@ -49,7 +47,7 @@ class ContentTypeBlocklist(PlaywrightMiddleware):
         return False
 
 
-class URLBlocklist(PlaywrightMiddleware):
+class URLBlocklist(BrowserMiddleware):
     def __init__(self, blocklist: list[str] | None = None, verbose: bool = False):
         self.blocklist = blocklist or [
             "google-analytics.com",
@@ -63,7 +61,7 @@ class URLBlocklist(PlaywrightMiddleware):
         ]
         self.verbose = verbose
 
-    async def handle(self, route: Route) -> bool:
+    async def handle(self, route: Any) -> bool:
         url = route.request.url
 
         if any(blocked in url for blocked in self.blocklist):
@@ -75,7 +73,7 @@ class URLBlocklist(PlaywrightMiddleware):
         return False
 
 
-class URLCacher(PlaywrightMiddleware):
+class URLCacher(BrowserMiddleware):
     def __init__(
         self,
         cache_dir: str = CACHE_DIR,
@@ -91,7 +89,7 @@ class URLCacher(PlaywrightMiddleware):
         url_hash = hashlib.md5(url.encode("utf-8")).hexdigest()
         return os.path.join(self.cache_dir, f"{url_hash}.json")
 
-    async def handle(self, route: Route) -> bool:
+    async def handle(self, route: Any) -> bool:
         request = route.request
         if request.method != "GET":
             return False
@@ -141,10 +139,10 @@ class URLCacher(PlaywrightMiddleware):
             return True
 
 
-class PlaywrightRateLimiterMiddleware(PlaywrightMiddleware):
+class PlaywrightRateLimiterMiddleware(BrowserMiddleware):
     def __init__(self, rate_limiter: RateLimiter):
         self.rate_limiter = rate_limiter
 
-    async def handle(self, route: Route) -> bool:
+    async def handle(self, route: Any) -> bool:
         await self.rate_limiter.acquire(route.request.url)
         return False

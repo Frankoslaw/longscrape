@@ -1,10 +1,10 @@
 import asyncio
 import sys
-from collections.abc import AsyncIterator
 
 from common import close_store, get_document_store, get_record_store
-from longscrape import Document, InputUrl, JobRequest, RecordSink
-from longscrape.runtime import InMemoryJobQueue
+from longscrape import InputUrl, JobRequest, PipelineContext, RecordSink
+from longscrape.fetchers import CachedFetcher
+from longscrape.runtime import Flow, InMemoryJobQueue
 from longscrape.stores import InMemoryDocumentStore
 from quotes import (
     AUTHOR,
@@ -13,10 +13,6 @@ from quotes import (
     AuthorExtractor,
     QuotesExtractor,
 )
-
-
-async def one(document: Document) -> AsyncIterator[Document]:
-    yield document
 
 
 async def main() -> None:
@@ -31,18 +27,34 @@ async def main() -> None:
         return
 
     job_queue = InMemoryJobQueue()
+    context = PipelineContext(job_queue)
     await job_queue.submit(JobRequest(QUOTES, InputUrl(START_URL)))
 
     seen: set[str] = set()
-
-    quotes_extractor = QuotesExtractor()
-    author_extractor = AuthorExtractor()
 
     quote_store = get_record_store("quotes")
     author_store = get_record_store("authors")
 
     quote_sink = RecordSink(quote_store)
     author_sink = RecordSink(author_store)
+
+    fetcher = CachedFetcher(None, store, write=False)
+    flows = {
+        QUOTES: (
+            Flow(context)
+            .fetch(fetcher)
+            .extract(QuotesExtractor())
+            .consume(quote_sink)
+            .build()
+        ),
+        AUTHOR: (
+            Flow(context)
+            .fetch(fetcher)
+            .extract(AuthorExtractor())
+            .consume(author_sink)
+            .build()
+        ),
+    }
 
     try:
         while not job_queue.empty():
@@ -51,18 +63,11 @@ async def main() -> None:
                 continue
 
             seen.add(job.input.url)
-            document = await store.load(job.input.url)
-            if document is None:
+            flow = flows.get(job.kind)
+            if flow is None:
                 continue
-
-            if job.kind == QUOTES:
-                records = quotes_extractor.extract(one(document), job, job_queue)
-                async for _ in quote_sink.transform(records, job, job_queue):
-                    pass
-            elif job.kind == AUTHOR:
-                records = author_extractor.extract(one(document), job, job_queue)
-                async for _ in author_sink.transform(records, job, job_queue):
-                    pass
+            async for _ in flow(job):
+                pass
     finally:
         await close_store(store)
         await close_store(quote_store)

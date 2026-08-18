@@ -16,12 +16,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from common import close_store, get_record_store
 from longscrape import (
-    DISCARD_SUBMITTER,
     Document,
     Extractor,
     InputDocument,
     Job,
-    JobSubmitter,
+    PipelineContext,
     Record,
 )
 from longscrape.capture import BrowserCapture, BrowserCaptureServer
@@ -50,7 +49,7 @@ class PeopleSearchExtractor(Extractor):
         self,
         documents: AsyncIterable[Document],
         job: Job,
-        submitter: JobSubmitter = DISCARD_SUBMITTER,
+        context: PipelineContext | None = None,
     ) -> AsyncIterator[Record]:
         async for document in documents:
             page = Selector(text=document.content.decode(errors="replace"))
@@ -73,7 +72,7 @@ class ProfileExtractor(Extractor):
         self,
         documents: AsyncIterable[Document],
         job: Job,
-        submitter: JobSubmitter = DISCARD_SUBMITTER,
+        context: PipelineContext | None = None,
     ) -> AsyncIterator[Record]:
         async for document in documents:
             page = Selector(text=document.content.decode(errors="replace"))
@@ -105,7 +104,11 @@ async def handle_capture(capture: BrowserCapture) -> AsyncIterator[Record]:
         content=capture.content.encode("utf-8"),
         content_type=capture.content_type,
     )
-    job = Job(kind=capture.kind, input=InputDocument(document), context=capture.context)
+    job = Job(
+        kind=capture.kind,
+        input=InputDocument(document),
+        metadata=capture.context,
+    )
     match capture.kind:
         case "linkedin.people-search":
             records = PeopleSearchExtractor().extract(one(document), job)

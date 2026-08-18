@@ -1,13 +1,15 @@
-from typing import AsyncIterable
+from collections.abc import AsyncIterator
 
 import httpx
 from longscrape_core import (
-    DISCARD_SUBMITTER,
     Document,
     Fetcher,
+    FetchFailure,
+    FetchFailureKind,
     InputUrl,
     Job,
-    JobSubmitter,
+    PipelineContext,
+    RetryableFetchFailure,
 )
 
 
@@ -16,15 +18,44 @@ class HttpxFetcher(Fetcher):
         self._http = http
 
     async def fetch(
-        self, job: Job, submitter: JobSubmitter = DISCARD_SUBMITTER
-    ) -> AsyncIterable[Document]:
+        self, job: Job, context: PipelineContext | None = None
+    ) -> AsyncIterator[Document]:
         if not isinstance(job.input, InputUrl):
-            raise TypeError("NewHttpxFetcher requires an InputUrl input")
+            raise FetchFailure(
+                FetchFailureKind.INVALID_INPUT,
+                "HttpxFetcher requires an InputUrl input",
+            )
 
-        response = await self._http.get(job.input.url)
-        if response.status_code != 200:
-            raise RuntimeError(
-                f"HTTP request failed with status {response.status_code}"
+        try:
+            response = await self._http.get(job.input.url)
+        except httpx.TimeoutException as error:
+            raise RetryableFetchFailure(
+                FetchFailureKind.TIMEOUT,
+                str(error),
+                url=job.input.url,
+                cause=error,
+            ) from error
+        except httpx.RequestError as error:
+            raise RetryableFetchFailure(
+                FetchFailureKind.NETWORK,
+                str(error),
+                url=job.input.url,
+                cause=error,
+            ) from error
+
+        if response.status_code >= 500:
+            raise RetryableFetchFailure(
+                FetchFailureKind.HTTP_STATUS,
+                f"HTTP request failed with status {response.status_code}",
+                url=str(response.url),
+                status=response.status_code,
+            )
+        if response.status_code >= 400:
+            raise FetchFailure(
+                FetchFailureKind.HTTP_STATUS,
+                f"HTTP request failed with status {response.status_code}",
+                url=str(response.url),
+                status=response.status_code,
             )
 
         # noinspection PyTypeChecker

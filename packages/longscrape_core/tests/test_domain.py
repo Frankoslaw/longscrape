@@ -1,6 +1,6 @@
 from datetime import UTC
 
-from longscrape_core.domain import (
+from longscrape_core.models import (
     Document,
     InputDocument,
     InputQuery,
@@ -11,13 +11,27 @@ from longscrape_core.domain import (
 )
 
 
-def test_jobs_receive_distinct_ids_and_contexts() -> None:
+def test_jobs_receive_distinct_ids_and_immutable_metadata() -> None:
     first = Job(kind="article", input=InputUrl("https://example.com/one"))
     second = Job(kind="article", input=InputUrl("https://example.com/two"))
 
     assert first.id != second.id
-    assert first.context == second.context == {}
-    assert first.context is not second.context
+    assert first.metadata == second.metadata == {}
+
+
+def test_spawned_jobs_track_their_root_and_parent() -> None:
+    root = Job.spawn_job(JobRequest("root", InputUrl("https://example.com")))
+    child = root.spawn_child(JobRequest("child", InputUrl("https://example.com/1")))
+    grandchild = child.spawn_child(
+        JobRequest("grandchild", InputUrl("https://example.com/2"))
+    )
+
+    assert root.parent_id is None
+    assert root.root_id == root.id
+    assert child.parent_id == root.id
+    assert child.root_id == root.id
+    assert grandchild.parent_id == child.id
+    assert grandchild.root_id == root.id
 
 
 def test_document_and_record_defaults_are_utc_and_not_shared() -> None:
@@ -47,13 +61,13 @@ def test_job_inputs_preserve_structured_queue_payloads() -> None:
     query_request = JobRequest(
         kind="search",
         input=InputQuery(query),
-        context={"retry": 0, "priority": "normal"},
+        metadata={"retry": 0, "priority": "normal"},
     )
     document_request = JobRequest(kind="extract-capture", input=InputDocument(document))
 
     assert url_request.input == InputUrl("https://example.com/page")
     assert query_request.input == InputQuery(query)
-    assert query_request.context == {"retry": 0, "priority": "normal"}
+    assert query_request.metadata == {"retry": 0, "priority": "normal"}
     assert isinstance(document_request.input, InputDocument)
     assert document_request.input.document is document
 

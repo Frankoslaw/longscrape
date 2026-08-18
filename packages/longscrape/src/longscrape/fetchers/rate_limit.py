@@ -1,12 +1,11 @@
 from collections.abc import AsyncIterator, Callable
 
 from longscrape_core import (
-    DISCARD_SUBMITTER,
     Document,
     Fetcher,
     InputUrl,
     Job,
-    JobSubmitter,
+    PipelineContext,
 )
 
 from longscrape.runtime.rate_limit import RateLimiter
@@ -34,8 +33,8 @@ class RateLimitedFetcher:
         self._rate_limit_key = rate_limit_key
 
     async def fetch(
-        self, job: Job, submitter: JobSubmitter = DISCARD_SUBMITTER
+        self, job: Job, context: PipelineContext | None = None
     ) -> AsyncIterator[Document]:
         await self._rate_limiter.acquire(self._rate_limit_key(job))
-        async for document in self._fetcher.fetch(job, submitter):
+        async for document in self._fetcher.fetch(job, context):
             yield document

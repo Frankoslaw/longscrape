@@ -29,10 +29,14 @@ uv sync
 Optional adapters:
 
 ```bash
-uv sync --extra playwright  # browser fetcher
-uv sync --extra patchright  # Patchright browser support
+uv sync --extra browser  # built-in Playwright browser provider
 uv sync --extra mongodb     # MongoDB document store
 ```
+
+Browser implementations are pluggable: install a compatible library such as
+Patchright or Camoufox in your application, then pass its provider to
+`BrowserManager`. Longscrape does not declare or version-pin those libraries.
+See [the Patchright example](examples/custom_browser.py).
 
 ## A pipeline
 
@@ -53,9 +57,10 @@ async with httpx.AsyncClient() as http:
         print(record.data)
 ```
 
-An extractor receives `documents`, `job`, and an optional `JobSubmitter`.
-Yield `Record` values and use `await submitter.submit(JobRequest(...))` for
-discovered work. The quotes example shows a minimal in-memory queue submitter.
+An extractor receives `documents`, `job`, and an optional `PipelineContext`.
+Yield `Record` values and use
+`await context.submit_child(job, JobRequest(...))` for discovered work. The
+quotes example shows a minimal in-memory queue bound to one pipeline context.
 
 Decorators compose around any fetcher:
 

@@ -1,7 +1,8 @@
 import asyncio
 from collections import deque
 
-from longscrape_core import Job, JobRequest, JobSubmitter
+from longscrape_core.context import JobSubmitter
+from longscrape_core.models import Job, JobRequest
 
 
 class InMemoryJobQueue(JobSubmitter):
@@ -10,7 +11,9 @@ class InMemoryJobQueue(JobSubmitter):
         self._not_empty = asyncio.Condition()
 
     async def submit(self, request: JobRequest) -> None:
-        job = Job(kind=request.kind, input=request.input, context=request.context)
+        await self.submit_job(Job.spawn_job(request))
+
+    async def submit_job(self, job: Job) -> None:
         async with self._not_empty:
             self._jobs.append(job)
             self._not_empty.notify()
