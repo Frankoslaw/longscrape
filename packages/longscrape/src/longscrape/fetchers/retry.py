@@ -5,11 +5,10 @@ from collections.abc import AsyncIterator, Callable
 from datetime import timedelta
 
 from longscrape_core import (
-    DISCARD_SUBMITTER,
     Document,
     Fetcher,
     Job,
-    JobSubmitter,
+    PipelineContext,
     RetryableFetchFailure,
 )
 
@@ -37,11 +36,11 @@ class RetryingFetcher:
         self._backoff = backoff
 
     async def fetch(
-        self, job: Job, submitter: JobSubmitter = DISCARD_SUBMITTER
+        self, job: Job, context: PipelineContext | None = None
     ) -> AsyncIterator[Document]:
         for retry in range(self._max_retries + 1):
             try:
-                async for document in self._fetcher.fetch(job, submitter):
+                async for document in self._fetcher.fetch(job, context):
                     yield document
                 return
             except RetryableFetchFailure as failure:

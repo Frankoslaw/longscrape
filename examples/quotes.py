@@ -10,13 +10,12 @@ from longscrape import (
     InputUrl,
     Job,
     JobRequest,
-    JobSubmitter,
+    PipelineContext,
     Record,
     RecordSink,
 )
 from longscrape.fetchers import CachedFetcher, HttpxFetcher, RateLimitedFetcher
 from longscrape.runtime import Flow, InMemoryJobQueue, LeakyBucketRateLimiter
-from longscrape_core import DISCARD_SUBMITTER
 from parsel import Selector
 
 QUOTES = "quotes-page"
@@ -29,8 +28,10 @@ class QuotesExtractor(Extractor):
         self,
         documents: AsyncIterable[Document],
         job: Job,
-        submitter: JobSubmitter = DISCARD_SUBMITTER,
+        context: PipelineContext | None = None,
     ) -> AsyncIterator[Record]:
+        if context is None:
+            raise RuntimeError("QuotesExtractor requires a PipelineContext")
         async for document in documents:
             page = Selector(text=document.content.decode(errors="replace"))
             for quote in page.css(".quote"):
@@ -42,12 +43,16 @@ class QuotesExtractor(Extractor):
                     },
                 )
             for href in page.css(".quote a[href*='/author/']::attr(href)").getall():
-                await submitter.submit(
-                    JobRequest(AUTHOR, InputUrl(urljoin(document.url, href)))
+                await context.submit_child(
+                    job,
+                    JobRequest(
+                        AUTHOR,
+                        InputUrl(urljoin(document.url, href.rstrip("/") + "/")),
+                    ),
                 )
             if href := page.css(".pager .next a::attr(href)").get():
-                await submitter.submit(
-                    JobRequest(QUOTES, InputUrl(urljoin(document.url, href)))
+                await context.submit_child(
+                    job, JobRequest(QUOTES, InputUrl(urljoin(document.url, href)))
                 )
 
 
@@ -56,7 +61,7 @@ class AuthorExtractor(Extractor):
         self,
         documents: AsyncIterable[Document],
         job: Job,
-        submitter: JobSubmitter = DISCARD_SUBMITTER,
+        context: PipelineContext | None = None,
     ) -> AsyncIterator[Record]:
         async for document in documents:
             page = Selector(text=document.content.decode(errors="replace"))
@@ -74,6 +79,7 @@ class AuthorExtractor(Extractor):
 
 async def main() -> None:
     job_queue = InMemoryJobQueue()
+    context = PipelineContext(job_queue)
     await job_queue.submit(JobRequest(QUOTES, InputUrl(START_URL)))
 
     quote_store = get_record_store("quotes")
@@ -91,21 +97,25 @@ async def main() -> None:
             ),
             document_store,
         )
+
+        quotes_flow = (
+            Flow(context)
+            .fetch(fetcher)
+            .extract(QuotesExtractor())
+            .consume(quote_sink)
+            .build()
+        )
+        author_flow = (
+            Flow(context)
+            .fetch(fetcher)
+            .extract(AuthorExtractor())
+            .consume(author_sink)
+            .build()
+        )
+
         flows = {
-            QUOTES: (
-                Flow(job_queue)
-                .fetch(fetcher)
-                .extract(QuotesExtractor())
-                .consume(quote_sink)
-                .build()
-            ),
-            AUTHOR: (
-                Flow(job_queue)
-                .fetch(fetcher)
-                .extract(AuthorExtractor())
-                .consume(author_sink)
-                .build()
-            ),
+            QUOTES: quotes_flow,
+            AUTHOR: author_flow,
         }
 
         try:

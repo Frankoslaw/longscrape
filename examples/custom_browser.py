@@ -13,11 +13,10 @@ from collections.abc import AsyncIterable, AsyncIterator
 from contextlib import AsyncExitStack
 from typing import Any
 
-from longscrape import Document, Extractor, InputUrl, Job, JobSubmitter, Record
+from longscrape import Document, Extractor, InputUrl, Job, PipelineContext, Record
 from longscrape.browser import BrowserConfig, BrowserManager
 from longscrape.fetchers import BrowserFetcher
 from longscrape.runtime import Flow
-from longscrape_core import DISCARD_SUBMITTER
 from parsel import Selector
 
 
@@ -61,7 +60,7 @@ class QuotesExtractor(Extractor):
         self,
         documents: AsyncIterable[Document],
         job: Job,
-        submitter: JobSubmitter = DISCARD_SUBMITTER,
+        context: PipelineContext | None = None,
     ) -> AsyncIterator[Record]:
         async for document in documents:
             page = Selector(text=document.content.decode(errors="replace"))

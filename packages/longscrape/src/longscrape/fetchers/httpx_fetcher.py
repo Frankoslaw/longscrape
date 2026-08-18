@@ -2,14 +2,13 @@ from collections.abc import AsyncIterator
 
 import httpx
 from longscrape_core import (
-    DISCARD_SUBMITTER,
     Document,
     Fetcher,
     FetchFailure,
     FetchFailureKind,
     InputUrl,
     Job,
-    JobSubmitter,
+    PipelineContext,
     RetryableFetchFailure,
 )
 
@@ -19,7 +18,7 @@ class HttpxFetcher(Fetcher):
         self._http = http
 
     async def fetch(
-        self, job: Job, submitter: JobSubmitter = DISCARD_SUBMITTER
+        self, job: Job, context: PipelineContext | None = None
     ) -> AsyncIterator[Document]:
         if not isinstance(job.input, InputUrl):
             raise FetchFailure(

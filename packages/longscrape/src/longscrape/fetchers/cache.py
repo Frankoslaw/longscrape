@@ -2,14 +2,13 @@ from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
 
 from longscrape_core import (
-    DISCARD_SUBMITTER,
     Document,
     Fetcher,
     InputUrl,
     Job,
-    JobSubmitter,
+    PipelineContext,
 )
-from longscrape_core.ports import DocumentStore
+from longscrape_core.protocols import DocumentStore
 
 
 def _url_key(job: Job) -> str:
@@ -41,7 +40,7 @@ class CachedFetcher:
         self._max_age = max_age
 
     async def fetch(
-        self, job: Job, submitter: JobSubmitter = DISCARD_SUBMITTER
+        self, job: Job, context: PipelineContext | None = None
     ) -> AsyncIterator[Document]:
         cached = await self._store.load(self._cache_key(job)) if self._read else None
         if cached is not None and self._is_fresh(cached):
@@ -51,9 +50,9 @@ class CachedFetcher:
         if self._fetcher is None:
             return
 
-        async for document in self._fetcher.fetch(job, submitter):
+        async for document in self._fetcher.fetch(job, context):
             if self._write:
-                await self._store.store(document)
+                await self._store.store(document, key=self._cache_key(job))
             yield document
 
     def _is_fresh(self, document: Document) -> bool:

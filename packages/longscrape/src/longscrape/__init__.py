@@ -1,8 +1,8 @@
 import logging as stdlib_logging
 
 from longscrape_core import (
-    DISCARD_SUBMITTER,
     BrowserHandoffRequired,
+    ContextKey,
     Document,
     Extractor,
     Fetcher,
@@ -13,20 +13,20 @@ from longscrape_core import (
     InputUrl,
     Job,
     JobRequest,
-    JobSubmitter,
+    PipelineContext,
     Record,
     RetryableFetchFailure,
     Transformer,
 )
-from longscrape_core.ports import DocumentStore, RecordSink, RecordStore
+from longscrape_core.protocols import DocumentStore, RecordSink, RecordStore
 
 from longscrape.logging import configure_logging
 
 stdlib_logging.getLogger("longscrape").addHandler(stdlib_logging.NullHandler())
 
 __all__ = [
-    "DISCARD_SUBMITTER",
     "BrowserHandoffRequired",
+    "ContextKey",
     "Document",
     "DocumentStore",
     "Extractor",
@@ -38,7 +38,7 @@ __all__ = [
     "InputUrl",
     "Job",
     "JobRequest",
-    "JobSubmitter",
+    "PipelineContext",
     "Record",
     "RetryableFetchFailure",
     "RecordSink",

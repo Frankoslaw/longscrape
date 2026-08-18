@@ -1,4 +1,6 @@
-from typing import Any
+import asyncio
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator
 
 from longscrape.browser._protocols import BrowserMiddleware
 from longscrape.browser.config import BrowserConfig
@@ -23,6 +25,7 @@ class BrowserManager:
         self.proxy = proxy
         self._browser: Any | None = None
         self._context: Any | None = None
+        self._lock = asyncio.Lock()
         self.middlewares: list[BrowserMiddleware] = []
 
     async def start(self) -> None:
@@ -86,13 +89,11 @@ class BrowserManager:
         if previous_context is not None:
             await previous_context.close()
 
-    async def launch_handoff_browser(self) -> Any:
-        if self._browser is None:
-            raise RuntimeError(
-                "Browser is not initialized. "
-                "Call start() before launch_handoff_browser()."
-            )
-        return await self._browser.browser_type.launch(headless=False)
+    @asynccontextmanager
+    async def locked(self) -> AsyncIterator[None]:
+        """Serialize changes to this browser's active context."""
+        async with self._lock:
+            yield
 
     def register_middleware(self, middleware: BrowserMiddleware) -> None:
         self.middlewares.append(middleware)

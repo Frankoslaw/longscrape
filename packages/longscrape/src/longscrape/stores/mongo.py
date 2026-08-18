@@ -1,5 +1,5 @@
 from longscrape_core import Document, Record
-from longscrape_core.ports import DocumentStore, RecordStore
+from longscrape_core.protocols import DocumentStore, RecordStore
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.collection import AsyncCollection
 
@@ -30,8 +30,10 @@ class PyMongoDocumentStore(DocumentStore):
     async def stop(self) -> None:
         await self.close()
 
-    async def store(self, document: Document) -> None:
+    async def store(self, document: Document, *, key: str | None = None) -> None:
+        cache_key = document.url if key is None else key
         payload = {
+            "key": cache_key,
             "url": document.url,
             "content": document.content,
             "content_type": document.content_type,
@@ -39,10 +41,15 @@ class PyMongoDocumentStore(DocumentStore):
             "headers": document.headers,
             "fetched_at": document.fetched_at,
         }
-        await self._collection.replace_one({"url": document.url}, payload, upsert=True)
+        await self._collection.replace_one({"key": cache_key}, payload, upsert=True)
 
     async def load(self, key: str) -> Document | None:
-        doc = await self._collection.find_one({"url": key})
+        doc = await self._collection.find_one({"key": key})
+        # Documents written before cache keys were introduced were addressed by
+        # their final URL. Retain that read path so existing caches can be
+        # re-extracted after URL canonicalization.
+        if doc is None:
+            doc = await self._collection.find_one({"url": key})
         if doc is None:
             return None
         return Document(

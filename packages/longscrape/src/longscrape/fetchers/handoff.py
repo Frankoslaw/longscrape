@@ -4,12 +4,11 @@ from collections.abc import AsyncIterator, Callable
 from typing import Protocol
 
 from longscrape_core import (
-    DISCARD_SUBMITTER,
     Document,
     Fetcher,
     FetchFailure,
     Job,
-    JobSubmitter,
+    PipelineContext,
 )
 
 type HandoffDetector = Callable[[Document, Job], FetchFailure | None]
@@ -19,7 +18,11 @@ class HandoffResolver(Protocol):
     """Resolve a detected fetch block so the wrapped fetcher can be retried."""
 
     async def resolve(
-        self, *, job: Job, document: Document, failure: FetchFailure
+        self,
+        *,
+        job: Job,
+        document: Document,
+        failure: FetchFailure,
     ) -> None: ...
 
 
@@ -47,12 +50,12 @@ class HandoffFetcher:
         self._max_handoffs = max_handoffs
 
     async def fetch(
-        self, job: Job, submitter: JobSubmitter = DISCARD_SUBMITTER
+        self, job: Job, context: PipelineContext | None = None
     ) -> AsyncIterator[Document]:
         for handoff_attempt in range(self._max_handoffs + 1):
             detected: tuple[Document, FetchFailure] | None = None
 
-            async for document in self._fetcher.fetch(job, submitter):
+            async for document in self._fetcher.fetch(job, context):
                 failure = self._detector(document, job)
                 if failure is None:
                     yield document

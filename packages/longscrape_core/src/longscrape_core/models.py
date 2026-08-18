@@ -4,13 +4,17 @@ import hashlib
 import json
 import uuid
 from base64 import b64encode
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
-from enum import Enum
-from typing import TypeAlias
+from datetime import UTC, datetime
+from types import MappingProxyType
 
-JsonScalar: TypeAlias = str | int | float | bool | None
-JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
+from longscrape_core._json import (
+    FrozenJsonValue,
+    JsonValue,
+    _freeze_json,
+    _thaw_json,
+)
 
 
 @dataclass(frozen=True)
@@ -20,7 +24,16 @@ class InputUrl:
 
 @dataclass(frozen=True)
 class InputQuery:
-    query: dict[str, JsonValue]
+    query: Mapping[str, FrozenJsonValue]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "query",
+            MappingProxyType(
+                {key: _freeze_json(value) for key, value in self.query.items()}
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -35,18 +48,50 @@ type JobInput = InputUrl | InputQuery | InputDocument
 class JobRequest:
     kind: str
     input: JobInput
-    context: dict[str, JsonValue] = field(default_factory=dict)
+    metadata: Mapping[str, FrozenJsonValue] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "metadata",
+            MappingProxyType(
+                {key: _freeze_json(value) for key, value in self.metadata.items()}
+            ),
+        )
 
 
 @dataclass(frozen=True)
 class Job:
     kind: str
     input: JobInput
-    # TODO: context should probably not be a property of the job itself as the
-    # fact that its even mutable currently is a error and some better mechanism
-    # to pass context between stages in functional matter would be preferable
-    context: dict[str, JsonValue] = field(default_factory=dict)
+    metadata: Mapping[str, FrozenJsonValue] = field(default_factory=dict)
     id: uuid.UUID = field(default_factory=uuid.uuid4)
+    parent_id: uuid.UUID | None = None
+    root_id: uuid.UUID | None = None
+
+    @classmethod
+    def spawn_job(cls, request: JobRequest) -> "Job":
+        return cls(kind=request.kind, input=request.input, metadata=request.metadata)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "metadata",
+            MappingProxyType(
+                {key: _freeze_json(value) for key, value in self.metadata.items()}
+            ),
+        )
+        if self.root_id is None:
+            object.__setattr__(self, "root_id", self.id)
+
+    def spawn_child(self, request: JobRequest) -> "Job":
+        return type(self)(
+            kind=request.kind,
+            input=request.input,
+            metadata=request.metadata,
+            parent_id=self.id,
+            root_id=self.root_id,
+        )
 
     @property
     def hash(self) -> str:
@@ -57,9 +102,6 @@ class Job:
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    # TODO: add parent/spawn utility functionality which tracks both last parent
-    # and root of the job tree
-
 
 @dataclass(frozen=True)
 class Document:
@@ -67,15 +109,18 @@ class Document:
     content: bytes
     content_type: str = "text/html"
     status: int = 200
-    headers: dict[str, str] = field(default_factory=dict)
+    headers: Mapping[str, str] = field(default_factory=dict)
     fetched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "headers", MappingProxyType(dict(self.headers)))
 
 
 def _job_input_payload(input: JobInput) -> dict[str, object]:
     if isinstance(input, InputUrl):
         return {"type": "url", "url": input.url}
     if isinstance(input, InputQuery):
-        return {"type": "query", "query": input.query}
+        return {"type": "query", "query": _thaw_json(input.query)}
     document = input.document
     return {
         "type": "document",
@@ -84,7 +129,7 @@ def _job_input_payload(input: JobInput) -> dict[str, object]:
             "content": b64encode(document.content).decode("ascii"),
             "content_type": document.content_type,
             "status": document.status,
-            "headers": document.headers,
+            "headers": dict(document.headers),
             "fetched_at": document.fetched_at.isoformat(),
         },
     }
@@ -104,36 +149,3 @@ class Record:
             separators=(",", ":"),
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-# Failure domain objects
-# TODO: How should more generalized failures be handled for other parts of pipeline
-# as currently all of them would result in abort. Also the notion of Recovery object
-# is interesting to introduce Retry, Pause and Fail where Pause would be for example
-# used for manual handoff after which it would become Fail if not synced.
-class FetchFailureKind(Enum):
-    NETWORK = "network"
-    TIMEOUT = "timeout"
-    HTTP_STATUS = "http_status"
-    RATE_LIMITED = "rate_limited"
-    BLOCKED = "blocked"
-    INVALID_INPUT = "invalid_input"
-
-
-@dataclass(frozen=True)
-class FetchFailure(Exception):
-    kind: FetchFailureKind
-    message: str
-    url: str | None = None
-    status: int | None = None
-    retry_after: timedelta | None = None
-    cause: Exception | None = None
-
-    def __str__(self) -> str:
-        return self.message
-
-
-class RetryableFetchFailure(FetchFailure): ...
-
-
-class BrowserHandoffRequired(FetchFailure): ...

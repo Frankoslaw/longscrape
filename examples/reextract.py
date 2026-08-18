@@ -2,7 +2,7 @@ import asyncio
 import sys
 
 from common import close_store, get_document_store, get_record_store
-from longscrape import InputUrl, JobRequest, RecordSink
+from longscrape import InputUrl, JobRequest, PipelineContext, RecordSink
 from longscrape.fetchers import CachedFetcher
 from longscrape.runtime import Flow, InMemoryJobQueue
 from longscrape.stores import InMemoryDocumentStore
@@ -27,6 +27,7 @@ async def main() -> None:
         return
 
     job_queue = InMemoryJobQueue()
+    context = PipelineContext(job_queue)
     await job_queue.submit(JobRequest(QUOTES, InputUrl(START_URL)))
 
     seen: set[str] = set()
@@ -40,14 +41,14 @@ async def main() -> None:
     fetcher = CachedFetcher(None, store, write=False)
     flows = {
         QUOTES: (
-            Flow(job_queue)
+            Flow(context)
             .fetch(fetcher)
             .extract(QuotesExtractor())
             .consume(quote_sink)
             .build()
         ),
         AUTHOR: (
-            Flow(job_queue)
+            Flow(context)
             .fetch(fetcher)
             .extract(AuthorExtractor())
             .consume(author_sink)

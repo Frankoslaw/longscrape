@@ -12,7 +12,13 @@ minutes); ``HandoffFetcher`` then retries with the updated session.
 
 import asyncio
 
-from longscrape import Document, FetchFailure, FetchFailureKind, InputUrl, Job
+from longscrape import (
+    Document,
+    FetchFailure,
+    FetchFailureKind,
+    InputUrl,
+    Job,
+)
 from longscrape.browser import BrowserConfig, BrowserManager, ManualHandoff
 from longscrape.browser.provider import PlaywrightBrowserProvider
 from longscrape.fetchers import BrowserFetcher, HandoffFetcher
@@ -42,19 +48,25 @@ def login_detector(document: Document, job: Job) -> FetchFailure | None:
 
 
 async def main() -> None:
-    config = BrowserConfig(launch_options={"headless": True})
-    browser = BrowserManager(PlaywrightBrowserProvider(config), config)
+    scrape_config = BrowserConfig(launch_options={"headless": True})
+    handoff_config = BrowserConfig(launch_options={"headless": False})
+    browser = BrowserManager(PlaywrightBrowserProvider(scrape_config), scrape_config)
+    handoff_browser = BrowserManager(
+        PlaywrightBrowserProvider(handoff_config), handoff_config
+    )
     await browser.start()
+    await handoff_browser.start()
     try:
         fetcher = HandoffFetcher(
             BrowserFetcher(browser),
             detector=login_detector,
-            handoff=ManualHandoff(browser),
+            handoff=ManualHandoff(browser, handoff_browser),
         )
         job = Job("quotes", InputUrl(URL))
         documents = [document async for document in fetcher.fetch(job)]
         print(f"Session handoff succeeded; fetched {documents[0].url}")
     finally:
+        await handoff_browser.stop()
         await browser.stop()
 
 

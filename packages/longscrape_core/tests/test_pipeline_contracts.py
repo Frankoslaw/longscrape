@@ -1,8 +1,8 @@
 import asyncio
 from collections.abc import AsyncIterable, AsyncIterator
 
-from longscrape_core.domain import Document, InputUrl, Job, JobRequest, Record
-from longscrape_core.ports import DISCARD_SUBMITTER, JobSubmitter
+from longscrape_core.context import PipelineContext
+from longscrape_core.models import Document, InputUrl, Job, JobRequest, Record
 
 
 async def _collect(items: AsyncIterable[Record]) -> list[Record]:
@@ -11,23 +11,26 @@ async def _collect(items: AsyncIterable[Record]) -> list[Record]:
 
 class CollectingSubmitter:
     def __init__(self) -> None:
-        self.requests: list[JobRequest] = []
+        self.jobs: list[Job] = []
 
-    async def submit(self, request: JobRequest) -> None:
-        self.requests.append(request)
+    async def submit_job(self, job: Job) -> None:
+        self.jobs.append(job)
 
 
 class ExampleFetcher:
     async def fetch(
-        self, job: Job, submitter: JobSubmitter = DISCARD_SUBMITTER
+        self, job: Job, context: PipelineContext | None = None
     ) -> AsyncIterator[Document]:
         assert isinstance(job.input, InputUrl)
-        await submitter.submit(
+        if context is None:
+            raise RuntimeError("ExampleFetcher requires a PipelineContext")
+        await context.submit_child(
+            job,
             JobRequest(
                 kind="fetch-url",
                 input=InputUrl("https://example.com/next"),
-                context={"source": job.input.url},
-            )
+                metadata={"source": job.input.url},
+            ),
         )
         yield Document(url=job.input.url, content=b"<title>Example</title>")
 
@@ -37,7 +40,7 @@ class ExampleExtractor:
         self,
         documents: AsyncIterable[Document],
         job: Job,
-        submitter: JobSubmitter = DISCARD_SUBMITTER,
+        context: PipelineContext | None = None,
     ) -> AsyncIterator[Record]:
         async for document in documents:
             yield Record(kind=job.kind, data={"url": document.url})
@@ -48,20 +51,21 @@ class AddSourceTransformer:
         self,
         records: AsyncIterable[Record],
         job: Job,
-        submitter: JobSubmitter = DISCARD_SUBMITTER,
+        context: PipelineContext | None = None,
     ) -> AsyncIterator[Record]:
         async for record in records:
             yield Record(kind=record.kind, data={**record.data, "source": "core-test"})
 
 
 def test_pipeline_stages_stream_records_and_submit_follow_up_jobs() -> None:
-    async def run() -> tuple[list[Record], list[JobRequest]]:
+    async def run() -> tuple[list[Record], list[Job]]:
         job = Job(kind="article", input=InputUrl("https://example.com/start"))
         submitter = CollectingSubmitter()
-        documents = ExampleFetcher().fetch(job, submitter)
-        records = ExampleExtractor().extract(documents, job, submitter)
-        transformed = AddSourceTransformer().transform(records, job, submitter)
-        return await _collect(transformed), submitter.requests
+        context = PipelineContext(submitter)
+        documents = ExampleFetcher().fetch(job, context)
+        records = ExampleExtractor().extract(documents, job, context)
+        transformed = AddSourceTransformer().transform(records, job, context)
+        return await _collect(transformed), submitter.jobs
 
     records, submitted = asyncio.run(run())
 
@@ -71,10 +75,10 @@ def test_pipeline_stages_stream_records_and_submit_follow_up_jobs() -> None:
             {"url": "https://example.com/start", "source": "core-test"},
         )
     ]
-    assert submitted == [
-        JobRequest(
-            kind="fetch-url",
-            input=InputUrl("https://example.com/next"),
-            context={"source": "https://example.com/start"},
-        )
-    ]
+    assert len(submitted) == 1
+    child = submitted[0]
+    assert child.kind == "fetch-url"
+    assert child.input == InputUrl("https://example.com/next")
+    assert child.metadata == {"source": "https://example.com/start"}
+    assert child.parent_id is not None
+    assert child.root_id == child.parent_id

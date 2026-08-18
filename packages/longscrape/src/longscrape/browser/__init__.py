@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from longscrape.browser.config import BrowserConfig
+    from longscrape.browser.context import CURRENT_PAGE
     from longscrape.browser.handoff import ManualHandoff
     from longscrape.browser.manager import BrowserManager
     from longscrape.browser.middlewares import (
@@ -20,15 +21,13 @@ if TYPE_CHECKING:
     )
     from longscrape.browser.provider import BrowserProvider, PlaywrightBrowserProvider
 
-    PlaywrightManager = BrowserManager
-
 __all__ = [
     "BrowserConfig",
     "BrowserManager",
     "BrowserProvider",
     "ContentTypeBlocklist",
+    "CURRENT_PAGE",
     "PlaywrightBrowserProvider",
-    "PlaywrightManager",
     "PlaywrightRateLimiterMiddleware",
     "ManualHandoff",
     "URLBlocklist",
@@ -41,6 +40,7 @@ _MODULES = {
     "ManualHandoff": "longscrape.browser.handoff",
     "BrowserProvider": "longscrape.browser.provider",
     "ContentTypeBlocklist": "longscrape.browser.middlewares",
+    "CURRENT_PAGE": "longscrape.browser.context",
     "PlaywrightBrowserProvider": "longscrape.browser.provider",
     "PlaywrightRateLimiterMiddleware": "longscrape.browser.middlewares",
     "URLBlocklist": "longscrape.browser.middlewares",
@@ -49,9 +49,6 @@ _MODULES = {
 
 
 def __getattr__(name: str):
-    if name == "PlaywrightManager":
-        # Deprecated spelling retained for source compatibility.
-        return getattr(import_module("longscrape.browser.manager"), "BrowserManager")
     try:
         module_name = _MODULES[name]
     except KeyError as error:

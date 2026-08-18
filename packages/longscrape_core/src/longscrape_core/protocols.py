@@ -1,25 +1,14 @@
-from typing import AsyncIterable, Protocol
+from collections.abc import AsyncIterable
+from typing import Protocol
 
-from longscrape_core.domain import Document, Job, JobRequest, Record
-
-
-# Job/Queue protocols
-class JobSubmitter(Protocol):
-    async def submit(self, request: JobRequest) -> None: ...
-
-
-class NullJobSubmitter:
-    async def submit(self, request: JobRequest) -> None:
-        pass
-
-
-DISCARD_SUBMITTER = NullJobSubmitter()
+from longscrape_core.context import PipelineContext
+from longscrape_core.models import Document, Job, Record
 
 
 # Pipeline protocols
 class Fetcher(Protocol):
     def fetch(
-        self, job: Job, submitter: JobSubmitter = DISCARD_SUBMITTER
+        self, job: Job, context: PipelineContext | None = None
     ) -> AsyncIterable[Document]: ...
 
 
@@ -28,7 +17,7 @@ class Extractor(Protocol):
         self,
         documents: AsyncIterable[Document],
         job: Job,
-        submitter: JobSubmitter = DISCARD_SUBMITTER,
+        context: PipelineContext | None = None,
     ) -> AsyncIterable[Record]: ...
 
 
@@ -41,7 +30,7 @@ class Transformer(Protocol):
         self,
         records: AsyncIterable[Record],
         job: Job,
-        submitter: JobSubmitter = DISCARD_SUBMITTER,
+        context: PipelineContext | None = None,
     ) -> AsyncIterable[Record]: ...
 
 
@@ -54,7 +43,7 @@ class Transformer(Protocol):
 # and provide AsyncIterable which could simply plug into existing pipeline
 # existing downstream of fetchers
 class DocumentStore(Protocol):
-    async def store(self, document: Document) -> None: ...
+    async def store(self, document: Document, *, key: str | None = None) -> None: ...
     async def load(self, key: str) -> Document | None: ...
 
 
@@ -73,7 +62,7 @@ class RecordSink(Transformer):
         self,
         records: AsyncIterable[Record],
         job: Job,
-        submitter: JobSubmitter = DISCARD_SUBMITTER,
+        context: PipelineContext | None = None,
     ) -> AsyncIterable[Record]:
         async for record in records:
             await self._store.store(record)

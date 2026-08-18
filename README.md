@@ -57,9 +57,10 @@ async with httpx.AsyncClient() as http:
         print(record.data)
 ```
 
-An extractor receives `documents`, `job`, and an optional `JobSubmitter`.
-Yield `Record` values and use `await submitter.submit(JobRequest(...))` for
-discovered work. The quotes example shows a minimal in-memory queue submitter.
+An extractor receives `documents`, `job`, and an optional `PipelineContext`.
+Yield `Record` values and use
+`await context.submit_child(job, JobRequest(...))` for discovered work. The
+quotes example shows a minimal in-memory queue bound to one pipeline context.
 
 Decorators compose around any fetcher:
 

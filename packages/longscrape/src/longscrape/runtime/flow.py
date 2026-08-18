@@ -4,11 +4,10 @@ from collections.abc import AsyncIterable, Callable
 from typing import Self
 
 from longscrape_core import (
-    DISCARD_SUBMITTER,
     Extractor,
     Fetcher,
     Job,
-    JobSubmitter,
+    PipelineContext,
     Record,
     Transformer,
 )
@@ -17,14 +16,14 @@ type RecordFlow = Callable[[Job], AsyncIterable[Record]]
 
 
 class Flow:
-    """Build a linear fetch/extract/transform flow bound to a submitter.
+    """Build a linear fetch/extract/transform flow bound to local context.
 
     A consumer such as ``RecordSink`` is a zero-output transformer, so built
     flows always return an ``AsyncIterable[Record]``.
     """
 
-    def __init__(self, submitter: JobSubmitter = DISCARD_SUBMITTER) -> None:
-        self._submitter = submitter
+    def __init__(self, context: PipelineContext | None = None) -> None:
+        self._context = context
         self._fetcher: Fetcher | None = None
         self._extractor: Extractor | None = None
         self._transformers: list[Transformer] = []
@@ -60,12 +59,13 @@ class Flow:
         fetcher = self._fetcher
         extractor = self._extractor
         transformers = tuple(self._transformers)
+        context = self._context
 
         def run(job: Job) -> AsyncIterable[Record]:
-            documents = fetcher.fetch(job, self._submitter)
-            records = extractor.extract(documents, job, self._submitter)
+            documents = fetcher.fetch(job, context)
+            records = extractor.extract(documents, job, context)
             for transformer in transformers:
-                records = transformer.transform(records, job, self._submitter)
+                records = transformer.transform(records, job, context)
             return records
 
         return run
