@@ -205,10 +205,14 @@ class Document:
         object.__setattr__(self, "headers", MappingProxyType(dict(self.headers)))
 
 
+# NOTE: T is no longer of type dict[str, JsonValue] as it would make usage with
+# TypedDict awkward but it doesn't mean that it does no longer need to be JSON
+# serializable
+# TODO: enforce in type system or in code this requirment in cleaner manner
 @dataclass(frozen=True)
-class Record:
+class Record[T]:
     kind: str
-    data: dict[str, JsonValue]
+    data: T
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
@@ -221,7 +225,9 @@ class Record:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def merge_records(existing: Record, incoming: Record) -> Record:
+def merge_records(
+    existing: Record[dict[str, JsonValue]], incoming: Record[dict[str, JsonValue]]
+) -> Record[dict[str, JsonValue]]:
     """Fill missing or ``None`` fields without replacing known values."""
 
     if existing.kind != incoming.kind:

@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from typing import Literal
+from typing import Any, Literal
 
 from longscrape_core import JobQueue, JobStore
 
@@ -11,7 +11,7 @@ class FlowRouter:
 
     def __init__(
         self,
-        flows: Mapping[str, RecordFlow],
+        flows: Mapping[str, RecordFlow[Any]],
         *,
         job_store: JobStore | None = None,
         on_unknown: Literal["skip", "error"] = "skip",

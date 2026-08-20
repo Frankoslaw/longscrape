@@ -86,7 +86,9 @@ def observe_fetcher(fetcher: Fetcher, *observers: StageObserver) -> Fetcher:
     return ObservedFetcher()
 
 
-def observe_extractor(extractor: Extractor, *observers: StageObserver) -> Extractor:
+def observe_extractor[Out](
+    extractor: Extractor[Out], *observers: StageObserver
+) -> Extractor[Out]:
     """Return an extractor decorator that emits stage callbacks."""
 
     class ObservedExtractor:
@@ -95,7 +97,7 @@ def observe_extractor(extractor: Extractor, *observers: StageObserver) -> Extrac
             documents: AsyncIterable[Document],
             job: Job,
             context: PipelineContext | None = None,
-        ) -> AsyncIterable[Record]:
+        ) -> AsyncIterable[Record[Out]]:
             return observe_stage(
                 extractor.extract(documents, job, context),
                 PipelineStage.EXTRACT,
@@ -107,18 +109,18 @@ def observe_extractor(extractor: Extractor, *observers: StageObserver) -> Extrac
     return ObservedExtractor()
 
 
-def observe_transformer(
-    transformer: Transformer, *observers: StageObserver
-) -> Transformer:
+def observe_transformer[In, Out](
+    transformer: Transformer[In, Out], *observers: StageObserver
+) -> Transformer[In, Out]:
     """Return a transformer decorator that emits stage callbacks."""
 
     class ObservedTransformer:
         def transform(
             self,
-            records: AsyncIterable[Record],
+            records: AsyncIterable[Record[In]],
             job: Job,
             context: PipelineContext | None = None,
-        ) -> AsyncIterable[Record]:
+        ) -> AsyncIterable[Record[Out]]:
             return observe_stage(
                 transformer.transform(records, job, context),
                 PipelineStage.TRANSFORM,
