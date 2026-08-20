@@ -37,7 +37,13 @@ class RetryingFetcher:
     ) -> AsyncIterator[Document]:
         for attempt in range(self._max_retries + 1):
             try:
+                # Do not expose a partial attempt: a subsequent retry restarts
+                # the wrapped fetcher and would otherwise duplicate documents
+                # already consumed by downstream stages.
+                documents: list[Document] = []
                 async for document in self._fetcher.fetch(job, context):
+                    documents.append(document)
+                for document in documents:
                     yield document
                 return
             except Exception as error:

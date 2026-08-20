@@ -59,3 +59,19 @@ def test_queue_only_delivers_a_pinned_job_to_its_worker() -> None:
     assert first.kind == "open"
     assert second.kind == "pinned"
     assert second.worker_id == "browser-a"
+
+
+def test_queue_wakes_the_matching_filtered_consumer() -> None:
+    async def run() -> Job:
+        queue = InMemoryJobQueue()
+        other = asyncio.create_task(queue.get(kind="other"))
+        await asyncio.sleep(0)
+        matching = asyncio.create_task(queue.get(kind="article"))
+        await asyncio.sleep(0)
+        await queue.submit(JobRequest("article", InputUrl("https://example.com")))
+        try:
+            return await asyncio.wait_for(matching, timeout=0.1)
+        finally:
+            other.cancel()
+
+    assert asyncio.run(run()).kind == "article"

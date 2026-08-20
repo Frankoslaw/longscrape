@@ -18,7 +18,9 @@ from longscrape import (
     observe_extractor,
     observe_fetcher,
 )
+from longscrape.browser.config import BrowserConfig
 from longscrape.browser.context import CURRENT_PAGE
+from longscrape.browser.manager import BrowserManager
 from longscrape.browser.page_store import PageStore
 from longscrape.fetchers import (
     BrowserFetcher,
@@ -131,6 +133,35 @@ def test_retrying_fetcher_retries_transient_failure() -> None:
     assert fetcher.attempts == 2
 
 
+class PartialThenFailingFetcher:
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    async def fetch(
+        self, job: Job, context: PipelineContext | None = None
+    ) -> AsyncIterator[Document]:
+        self.attempts += 1
+        yield Document(url="https://example.com", content=b"document")
+        if self.attempts == 1:
+            raise TimeoutError("disconnected")
+
+
+def test_retrying_fetcher_does_not_emit_a_partial_attempt() -> None:
+    fetcher = PartialThenFailingFetcher()
+    retrying = RetryingFetcher(fetcher, policy=RetryPolicy(), max_retries=1)
+
+    async def collect() -> list[Document]:
+        return [
+            document
+            async for document in retrying.fetch(
+                Job("article", InputUrl("https://example.com"))
+            )
+        ]
+
+    assert [document.content for document in asyncio.run(collect())] == [b"document"]
+    assert fetcher.attempts == 2
+
+
 class BlockedThenDocumentFetcher:
     def __init__(self) -> None:
         self.attempts = 0
@@ -179,6 +210,23 @@ def test_handoff_fetcher_resolves_a_handoff_decision_and_retries() -> None:
 
     assert [document.content for document in asyncio.run(collect())] == [b"article"]
     assert fetcher.attempts == 2
+    assert handoff.calls == 1
+
+
+def test_handoff_fetcher_does_not_emit_a_partial_attempt() -> None:
+    fetcher = PartialThenFailingFetcher()
+    handoff = RecordingHandoff()
+    wrapped = HandoffFetcher(fetcher, policy=HandoffPolicy(), handoff=handoff)
+
+    async def collect() -> list[Document]:
+        return [
+            document
+            async for document in wrapped.fetch(
+                Job("article", InputUrl("https://example.com"))
+            )
+        ]
+
+    assert [document.content for document in asyncio.run(collect())] == [b"document"]
     assert handoff.calls == 1
 
 
@@ -391,6 +439,44 @@ class FakeBrowserPage:
         self.closed = True
 
 
+class FakeBrowserContext:
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def new_page(self) -> FakeBrowserPage:
+        return FakeBrowserPage()
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class FakeManagedBrowser:
+    def __init__(self) -> None:
+        self.contexts: list[FakeBrowserContext] = []
+
+    async def new_context(self, **kwargs: object) -> FakeBrowserContext:
+        context = FakeBrowserContext()
+        self.contexts.append(context)
+        return context
+
+    async def close(self) -> None:
+        pass
+
+
+class FakeBrowserProvider:
+    def __init__(self, config: BrowserConfig | None = None) -> None:
+        self.browser = FakeManagedBrowser()
+
+    async def start(self) -> None:
+        pass
+
+    async def launch_browser(self) -> FakeManagedBrowser:
+        return self.browser
+
+    async def close(self) -> None:
+        pass
+
+
 class FakeBrowser:
     def __init__(self) -> None:
         self.created_pages = 0
@@ -459,6 +545,25 @@ def test_browser_fetcher_restores_a_page_named_in_job_metadata() -> None:
     assert [document.url for document in documents] == ["https://example.com/restored"]
     assert browser.created_pages == 0
     assert page.closed is False
+
+
+def test_replacing_a_browser_context_invalidates_stored_pages() -> None:
+    async def run() -> None:
+        manager = BrowserManager(FakeBrowserProvider(), BrowserConfig())
+        await manager.start()
+        page = await manager.create_page()
+        page_id = manager.store_page(page)
+        await manager.replace_context(storage_state={})
+        assert page.closed is True
+        try:
+            manager.restore_page(page_id)
+        except LookupError:
+            pass
+        else:
+            raise AssertionError("expected the stored page to be invalidated")
+        await manager.stop()
+
+    asyncio.run(run())
 
 
 def test_cached_fetcher_without_a_fallback_is_read_only() -> None:

@@ -60,12 +60,17 @@ class HandoffFetcher:
         for attempt in range(self._max_recoveries + 1):
             detected = False
             try:
+                # As with ordinary retries, defer output until the attempt has
+                # completed so a recovery cannot replay partial output.
+                documents: list[Document] = []
                 async for document in self._fetcher.fetch(job, context):
                     if self._detector is not None:
                         error = self._detector(document, job)
                         if error is not None:
                             detected = True
                             raise error
+                    documents.append(document)
+                for document in documents:
                     yield document
                 return
             except Exception as error:

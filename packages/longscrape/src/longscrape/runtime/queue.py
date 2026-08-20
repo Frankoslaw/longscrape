@@ -20,7 +20,10 @@ class InMemoryJobQueue(JobQueue):
             await asyncio.sleep(delay.total_seconds())
         async with self._not_empty:
             self._jobs.append(job)
-            self._not_empty.notify()
+            # A waiter can be filtering by kind or worker affinity.  Waking a
+            # single, non-matching waiter would leave an eligible waiter asleep
+            # even though its job is already in the queue.
+            self._not_empty.notify_all()
 
     async def get(
         self, kind: str | None = None, *, worker_id: str | None = None

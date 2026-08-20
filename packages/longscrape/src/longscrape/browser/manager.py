@@ -98,6 +98,9 @@ class BrowserManager:
         previous_context = self._context
         self._context = await self._new_context(storage_state=storage_state)
         if previous_context is not None:
+            # Stored pages belong to the previous context and are closed with
+            # it. Remove them before they can be restored by a later job.
+            await self.page_store.close_all()
             await previous_context.close()
 
     @asynccontextmanager
