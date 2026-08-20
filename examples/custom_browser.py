@@ -2,7 +2,7 @@
 
 Run from the repository root:
 
-    uv run --with patchright python examples/custom_browser_provider.py
+    uv run --with patchright python -m examples.custom_browser
 
 For an application, install ``longscrape`` and ``patchright`` independently;
 Longscrape does not own Patchright's version.
@@ -15,7 +15,7 @@ from typing import Any
 
 from longscrape import Document, Extractor, InputUrl, Job, PipelineContext, Record
 from longscrape.browser import BrowserConfig, BrowserManager
-from longscrape.fetchers import BrowserFetcher
+from longscrape.fetchers import BrowserFetcher, FetcherBuilder
 from longscrape.runtime import Flow
 from parsel import Selector
 
@@ -78,7 +78,11 @@ async def main() -> None:
     config = BrowserConfig(launch_options={"headless": True})
     provider = PatchrightBrowserProvider(config)
     browser = BrowserManager(provider, config)
-    fetcher = BrowserFetcher(browser, page_ready=wait_for_quotes)
+    fetcher = (
+        FetcherBuilder()
+        .base(BrowserFetcher(browser, page_ready=wait_for_quotes))
+        .build()
+    )
     extractor = QuotesExtractor()
 
     await browser.start()

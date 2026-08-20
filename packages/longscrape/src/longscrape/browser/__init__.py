@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         URLBlocklist,
         URLCacher,
     )
+    from longscrape.browser.page_store import PageStore
     from longscrape.browser.provider import BrowserProvider, PlaywrightBrowserProvider
 
 __all__ = [
@@ -28,6 +29,7 @@ __all__ = [
     "ContentTypeBlocklist",
     "CURRENT_PAGE",
     "PlaywrightBrowserProvider",
+    "PageStore",
     "PlaywrightRateLimiterMiddleware",
     "ManualHandoff",
     "URLBlocklist",
@@ -37,6 +39,7 @@ __all__ = [
 _MODULES = {
     "BrowserConfig": "longscrape.browser.config",
     "BrowserManager": "longscrape.browser.manager",
+    "PageStore": "longscrape.browser.page_store",
     "ManualHandoff": "longscrape.browser.handoff",
     "BrowserProvider": "longscrape.browser.provider",
     "ContentTypeBlocklist": "longscrape.browser.middlewares",

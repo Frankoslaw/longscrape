@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "longscrape"
-version = "0.2.1"
+version = "0.2.2"
 description = "Add your description here"
 readme = "README.md"
 authors = [
@@ -28,8 +28,18 @@ browser-capture = [
 mongodb = [
     "pymongo>=4.17.0",
 ]
+dramatiq = [
+        "dramatiq[redis,watch]>=2.2.0",
+]
+structlog = [
+    "structlog>=25.0.0",
+]
+otel = [
+    "opentelemetry-api>=1.30.0",
+    "opentelemetry-sdk>=1.30.0",
+]
 all = [
-    "longscrape[browser,browser-capture,mongodb]",
+    "longscrape[browser,browser-capture,mongodb,dramatiq,structlog,otel]",
 ]
 
 [tool.hatch.build.targets.wheel]

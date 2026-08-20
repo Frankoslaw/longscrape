@@ -1,18 +1,18 @@
 import asyncio
 import sys
 
-from common import close_store, get_document_store, get_record_store
 from longscrape import InputUrl, JobRequest, PipelineContext, RecordSink
-from longscrape.fetchers import CachedFetcher
-from longscrape.runtime import Flow, InMemoryJobQueue
-from longscrape.stores import InMemoryDocumentStore
-from quotes import (
-    AUTHOR,
-    QUOTES,
-    START_URL,
-    AuthorExtractor,
-    QuotesExtractor,
+from longscrape.fetchers import FetcherBuilder
+from longscrape.runtime import (
+    Flow,
+    FlowRouter,
+    InMemoryJobQueue,
+    StoredJobQueue,
 )
+from longscrape.stores import InMemoryDocumentStore
+
+from .common import close_store, get_document_store, get_job_store, get_record_store
+from .quotes import AUTHOR, QUOTES, START_URL, AuthorExtractor, QuotesExtractor
 
 
 async def main() -> None:
@@ -26,11 +26,10 @@ async def main() -> None:
         )
         return
 
-    job_queue = InMemoryJobQueue()
+    job_store = get_job_store()
+    job_queue = StoredJobQueue(InMemoryJobQueue(), job_store)
     context = PipelineContext(job_queue)
     await job_queue.submit(JobRequest(QUOTES, InputUrl(START_URL)))
-
-    seen: set[str] = set()
 
     quote_store = get_record_store("quotes")
     author_store = get_record_store("authors")
@@ -38,38 +37,29 @@ async def main() -> None:
     quote_sink = RecordSink(quote_store)
     author_sink = RecordSink(author_store)
 
-    fetcher = CachedFetcher(None, store, write=False)
+    fetcher = FetcherBuilder().cache(store, write=False).build()
     flows = {
         QUOTES: (
             Flow(context)
             .fetch(fetcher)
             .extract(QuotesExtractor())
-            .consume(quote_sink)
+            .transform(quote_sink)
             .build()
         ),
         AUTHOR: (
             Flow(context)
             .fetch(fetcher)
             .extract(AuthorExtractor())
-            .consume(author_sink)
+            .transform(author_sink)
             .build()
         ),
     }
 
     try:
-        while not job_queue.empty():
-            job = await job_queue.get()
-            if not isinstance(job.input, InputUrl) or job.input.url in seen:
-                continue
-
-            seen.add(job.input.url)
-            flow = flows.get(job.kind)
-            if flow is None:
-                continue
-            async for _ in flow(job):
-                pass
+        await FlowRouter(flows, job_store=job_store).run(job_queue)
     finally:
         await close_store(store)
+        await close_store(job_store)
         await close_store(quote_store)
         await close_store(author_store)
 

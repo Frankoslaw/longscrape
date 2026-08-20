@@ -14,5 +14,19 @@ services:
       timeout: 3s
       retries: 10
 
+  redis-stack:
+    image: redis/redis-stack:latest
+    ports:
+      - "6379:6379"   # Redis server
+      - "8001:8001"   # RedisInsight Web UI
+    volumes:
+      - redis-stack-data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
 volumes:
   mongodb-data:
+  redis-stack-data:

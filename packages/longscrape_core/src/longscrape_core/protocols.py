@@ -1,11 +1,41 @@
 from collections.abc import AsyncIterable
-from typing import Protocol
+from datetime import timedelta
+from typing import Callable, Protocol
+from uuid import UUID
 
-from longscrape_core.context import PipelineContext
-from longscrape_core.models import Document, Job, Record
+from longscrape_core.context import JobSubmitter, PipelineContext
+from longscrape_core.failures import PipelineFailure, Recovery
+from longscrape_core.models import (
+    CollisionPolicy,
+    Document,
+    DocumentRef,
+    Job,
+    Record,
+    RecordRef,
+    StoredJob,
+)
 
 
 # Pipeline protocols
+class JobQueue(JobSubmitter, Protocol):
+    """Queue contract with optional worker-affinity delivery.
+
+    ``get(worker_id=...)`` may return unpinned jobs and jobs pinned to that
+    exact ID, but never jobs pinned to another worker. ``get()`` without an ID
+    returns only unpinned jobs.
+    """
+
+    async def submit_job(self, job: Job, *, delay: timedelta | None = None) -> None: ...
+
+    async def get(
+        self, kind: str | None = None, *, worker_id: str | None = None
+    ) -> Job: ...
+
+    def empty(
+        self, kind: str | None = None, *, worker_id: str | None = None
+    ) -> bool: ...
+
+
 class Fetcher(Protocol):
     def fetch(
         self, job: Job, context: PipelineContext | None = None
@@ -34,29 +64,64 @@ class Transformer(Protocol):
     ) -> AsyncIterable[Record]: ...
 
 
-# Store protocols
-# TODO: in future modify stores to return handle/capability instead of random key to
-# make it easier to pass around via job queue (drastiq only accepts JSON serializable
-# data thus this will become a hard requirment at some point)
-# TODO: to better support reextract functionality in the future separate protocol
-# for reading would be preferable as it could fetch all of the documents by kind
-# and provide AsyncIterable which could simply plug into existing pipeline
-# existing downstream of fetchers
+class RecoveryPolicy(Protocol):
+    """Chooses a recovery recommendation for a failure."""
+
+    async def decide(self, failure: PipelineFailure) -> Recovery: ...
+
+
+class JobStore(Protocol):
+    """Tracks durable job identity and execution state."""
+
+    async def register(self, job: Job, *, key: str | None = None) -> bool: ...
+    async def get(self, job_id: UUID) -> StoredJob: ...
+    async def start(self, job_id: UUID) -> None: ...
+    async def succeed(self, job_id: UUID) -> None: ...
+    async def fail(self, job_id: UUID, error: Exception) -> None: ...
+
+
 class DocumentStore(Protocol):
-    async def store(self, document: Document, *, key: str | None = None) -> None: ...
-    async def load(self, key: str) -> Document | None: ...
+    """Immutable document revisions addressed by opaque refs and stable keys."""
+
+    async def put(
+        self,
+        document: Document,
+        *,
+        key: str,
+        policy: CollisionPolicy = CollisionPolicy.NEW,
+    ) -> DocumentRef: ...
+    async def get(self, ref: DocumentRef) -> Document: ...
+    async def latest(self, key: str) -> DocumentRef | None: ...
+    def iter_latest(self) -> AsyncIterable[DocumentRef]: ...
 
 
 class RecordStore(Protocol):
-    async def store(self, record: Record) -> None: ...
-    async def get(self, key: str) -> Record | None: ...
+    """Records addressed by opaque refs and replaceable stable keys."""
+
+    async def put(
+        self,
+        record: Record,
+        *,
+        key: str | None = None,
+        policy: CollisionPolicy = CollisionPolicy.NEW,
+    ) -> RecordRef: ...
+    async def get(self, ref: RecordRef) -> Record: ...
+    async def latest(self, key: str) -> RecordRef | None: ...
 
 
 # TODO: In future consider buffered sink to support batched writes instead of spamming
 # the database with small records
 class RecordSink(Transformer):
-    def __init__(self, store: RecordStore) -> None:
+    def __init__(
+        self,
+        store: RecordStore,
+        *,
+        key: Callable[[Record, Job], str] | None = None,
+        policy: CollisionPolicy = CollisionPolicy.NEW,
+    ) -> None:
         self._store = store
+        self._key = key
+        self._policy = policy
 
     async def transform(
         self,
@@ -65,7 +130,11 @@ class RecordSink(Transformer):
         context: PipelineContext | None = None,
     ) -> AsyncIterable[Record]:
         async for record in records:
-            await self._store.store(record)
+            await self._store.put(
+                record,
+                key=self._key(record, job) if self._key is not None else None,
+                policy=self._policy,
+            )
 
         if False:
             yield

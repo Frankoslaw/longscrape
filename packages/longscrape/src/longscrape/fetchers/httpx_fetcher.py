@@ -1,15 +1,15 @@
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
+from email.utils import parsedate_to_datetime
 
 import httpx
 from longscrape_core import (
     Document,
     Fetcher,
-    FetchFailure,
-    FetchFailureKind,
+    HttpStatusError,
     InputUrl,
     Job,
     PipelineContext,
-    RetryableFetchFailure,
 )
 
 
@@ -21,41 +21,16 @@ class HttpxFetcher(Fetcher):
         self, job: Job, context: PipelineContext | None = None
     ) -> AsyncIterator[Document]:
         if not isinstance(job.input, InputUrl):
-            raise FetchFailure(
-                FetchFailureKind.INVALID_INPUT,
-                "HttpxFetcher requires an InputUrl input",
-            )
+            raise TypeError("HttpxFetcher requires an InputUrl input")
 
-        try:
-            response = await self._http.get(job.input.url)
-        except httpx.TimeoutException as error:
-            raise RetryableFetchFailure(
-                FetchFailureKind.TIMEOUT,
-                str(error),
-                url=job.input.url,
-                cause=error,
-            ) from error
-        except httpx.RequestError as error:
-            raise RetryableFetchFailure(
-                FetchFailureKind.NETWORK,
-                str(error),
-                url=job.input.url,
-                cause=error,
-            ) from error
-
-        if response.status_code >= 500:
-            raise RetryableFetchFailure(
-                FetchFailureKind.HTTP_STATUS,
-                f"HTTP request failed with status {response.status_code}",
-                url=str(response.url),
-                status=response.status_code,
-            )
+        response = await self._http.get(job.input.url)
         if response.status_code >= 400:
-            raise FetchFailure(
-                FetchFailureKind.HTTP_STATUS,
-                f"HTTP request failed with status {response.status_code}",
+            raise HttpStatusError(
                 url=str(response.url),
                 status=response.status_code,
+                retry_after=(
+                    _retry_after(response) if response.status_code == 429 else None
+                ),
             )
 
         # noinspection PyTypeChecker
@@ -66,3 +41,20 @@ class HttpxFetcher(Fetcher):
             headers=dict(response.headers),
             status=response.status_code,
         )
+
+
+def _retry_after(response: httpx.Response) -> timedelta | None:
+    value = response.headers.get("retry-after")
+    if value is None:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(value)
+        except TypeError, ValueError:
+            return None
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=UTC)
+        seconds = (retry_at - datetime.now(UTC)).total_seconds()
+    return timedelta(seconds=max(seconds, 0))

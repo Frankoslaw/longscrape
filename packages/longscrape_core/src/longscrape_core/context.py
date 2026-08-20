@@ -30,12 +30,19 @@ class PipelineContext:
     """
 
     submitter: JobSubmitter | None = None
+    worker_id: str | None = None
     _values: dict[ContextKey[object], object] = field(default_factory=dict)
 
     async def submit_child(self, parent: Job, request: JobRequest) -> None:
         if self.submitter is None:
             raise RuntimeError("PipelineContext has no job submitter")
         await self.submitter.submit_job(parent.spawn_child(request))
+
+    def require_worker_id(self) -> str:
+        """Return the identity of this worker for an affinity-pinned job."""
+        if self.worker_id is None:
+            raise RuntimeError("PipelineContext has no worker_id")
+        return self.worker_id
 
     def set(self, key: ContextKey[T], value: T) -> None:
         self._values[cast(ContextKey[object], key)] = value

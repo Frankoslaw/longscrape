@@ -2,7 +2,8 @@ from datetime import UTC
 
 from longscrape_core.models import (
     Document,
-    InputDocument,
+    DocumentInput,
+    DocumentRef,
     InputQuery,
     InputUrl,
     Job,
@@ -17,6 +18,16 @@ def test_jobs_receive_distinct_ids_and_immutable_metadata() -> None:
 
     assert first.id != second.id
     assert first.metadata == second.metadata == {}
+
+
+def test_worker_pin_is_serialized_and_inherited_by_child_jobs() -> None:
+    root = Job.spawn_job(
+        JobRequest("root", InputUrl("https://example.com"), worker_id="worker-1")
+    )
+    child = root.spawn_child(JobRequest("child", InputUrl("https://example.com/child")))
+
+    assert Job.from_dict(root.to_dict()).worker_id == "worker-1"
+    assert child.worker_id == "worker-1"
 
 
 def test_spawned_jobs_track_their_root_and_parent() -> None:
@@ -63,21 +74,19 @@ def test_job_inputs_preserve_structured_queue_payloads() -> None:
         input=InputQuery(query),
         metadata={"retry": 0, "priority": "normal"},
     )
-    document_request = JobRequest(kind="extract-capture", input=InputDocument(document))
+    document_ref = DocumentRef("test", "capture")
+    document_request = JobRequest(
+        kind="extract-capture", input=DocumentInput(document_ref)
+    )
 
     assert url_request.input == InputUrl("https://example.com/page")
     assert query_request.input == InputQuery(query)
     assert query_request.metadata == {"retry": 0, "priority": "normal"}
-    assert isinstance(document_request.input, InputDocument)
-    assert document_request.input.document is document
+    assert isinstance(document_request.input, DocumentInput)
+    assert document_request.input.ref is document_ref
 
 
 def test_job_hashes_are_stable_for_all_input_types() -> None:
-    document = Document(
-        url="https://example.com/page",
-        content=b"<html></html>",
-    )
-
     assert (
         Job(kind="fetch", input=InputUrl("https://example.com")).hash
         == Job(kind="fetch", input=InputUrl("https://example.com")).hash
@@ -87,6 +96,6 @@ def test_job_hashes_are_stable_for_all_input_types() -> None:
         == Job(kind="search", input=InputQuery({"page": 1})).hash
     )
     assert (
-        Job(kind="extract", input=InputDocument(document)).hash
-        == Job(kind="extract", input=InputDocument(document)).hash
+        Job(kind="extract", input=DocumentInput(DocumentRef("test", "capture"))).hash
+        == Job(kind="extract", input=DocumentInput(DocumentRef("test", "capture"))).hash
     )

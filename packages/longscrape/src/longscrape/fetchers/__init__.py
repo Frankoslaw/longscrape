@@ -1,15 +1,12 @@
 from importlib import import_module
 from typing import TYPE_CHECKING
 
+from longscrape.fetchers.builder import FetcherBuilder
 from longscrape.fetchers.cache import CachedFetcher
-from longscrape.fetchers.handoff import (
-    HandoffDetector,
-    HandoffFetcher,
-    HandoffResolver,
-)
+from longscrape.fetchers.handoff import FailureDetector, HandoffFetcher, HandoffResolver
 from longscrape.fetchers.httpx_fetcher import HttpxFetcher
 from longscrape.fetchers.rate_limit import RateLimitedFetcher
-from longscrape.fetchers.retry import Backoff, RetryingFetcher
+from longscrape.fetchers.retry import RetryingFetcher
 
 if TYPE_CHECKING:
     from longscrape.fetchers.playwright_fetcher import BrowserFetcher
@@ -18,15 +15,15 @@ DefaultFetcher = HttpxFetcher
 
 __all__ = [
     "CachedFetcher",
+    "FetcherBuilder",
     "BrowserFetcher",
     "DefaultFetcher",
     "HttpxFetcher",
     "HandoffFetcher",
-    "HandoffDetector",
+    "FailureDetector",
     "HandoffResolver",
     "RateLimitedFetcher",
     "RetryingFetcher",
-    "Backoff",
 ]
 
 

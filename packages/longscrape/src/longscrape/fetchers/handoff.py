@@ -1,78 +1,90 @@
-"""Document-detected browser or human handoff fetcher decorator."""
+"""A local recovery executor for fetch failures that require human handoff."""
 
+import asyncio
 from collections.abc import AsyncIterator, Callable
 from typing import Protocol
 
 from longscrape_core import (
     Document,
     Fetcher,
-    FetchFailure,
     Job,
     PipelineContext,
+    PipelineFailure,
+    PipelineStage,
+    Recovery,
+    RecoveryAction,
+    RecoveryPolicy,
 )
-
-type HandoffDetector = Callable[[Document, Job], FetchFailure | None]
 
 
 class HandoffResolver(Protocol):
-    """Resolve a detected fetch block so the wrapped fetcher can be retried."""
+    """Perform a handoff, then make its resulting state available to a retry."""
 
-    async def resolve(
-        self,
-        *,
-        job: Job,
-        document: Document,
-        failure: FetchFailure,
-    ) -> None: ...
+    async def resolve(self, failure: PipelineFailure) -> None: ...
+
+
+type FailureDetector = Callable[[Document, Job], Exception | None]
 
 
 class HandoffFetcher:
-    """Retry the wrapped fetcher after a resolver handles a blocked document.
+    """Apply a recovery policy to failures from one wrapped fetcher.
 
-    The resolver must make state available to the wrapped fetcher (for example,
-    by updating shared cookies). A manual resolver may instead raise a typed
-    ``FetchFailure`` to hand control to the application.
+    This decorator is intentionally local: it only retries the wrapped fetcher.
+    An optional detector may turn an unsuccessful document (such as a login
+    page returned with HTTP 200) into an ordinary exception. A ``HANDOFF``
+    decision calls the resolver before retrying; a ``RETRY`` decision waits
+    for its optional delay; ``FAIL`` re-raises the exception. Without a
+    policy, only a failure reported by the detector triggers a handoff.
     """
 
     def __init__(
         self,
         fetcher: Fetcher,
         *,
-        detector: HandoffDetector,
+        policy: RecoveryPolicy | None = None,
         handoff: HandoffResolver,
-        max_handoffs: int = 1,
+        detector: FailureDetector | None = None,
+        max_recoveries: int = 1,
     ) -> None:
-        if max_handoffs < 0:
-            raise ValueError("max_handoffs must be non-negative")
+        if max_recoveries < 0:
+            raise ValueError("max_recoveries must be non-negative")
         self._fetcher = fetcher
-        self._detector = detector
+        self._policy = policy
         self._handoff = handoff
-        self._max_handoffs = max_handoffs
+        self._detector = detector
+        self._max_recoveries = max_recoveries
 
     async def fetch(
         self, job: Job, context: PipelineContext | None = None
     ) -> AsyncIterator[Document]:
-        for handoff_attempt in range(self._max_handoffs + 1):
-            detected: tuple[Document, FetchFailure] | None = None
-
-            async for document in self._fetcher.fetch(job, context):
-                failure = self._detector(document, job)
-                if failure is None:
+        for attempt in range(self._max_recoveries + 1):
+            detected = False
+            try:
+                async for document in self._fetcher.fetch(job, context):
+                    if self._detector is not None:
+                        error = self._detector(document, job)
+                        if error is not None:
+                            detected = True
+                            raise error
                     yield document
-                    continue
-                detected = document, failure
-                break
-
-            if detected is None:
                 return
-
-            document, failure = detected
-            if handoff_attempt == self._max_handoffs:
-                raise failure
-            await self._handoff.resolve(
-                job=job,
-                document=document,
-                failure=failure,
-            )
+            except Exception as error:
+                failure = PipelineFailure(PipelineStage.FETCH, job, error, context)
+                recovery = (
+                    await self._policy.decide(failure)
+                    if self._policy is not None
+                    else Recovery(
+                        RecoveryAction.HANDOFF if detected else RecoveryAction.FAIL
+                    )
+                )
+                if (
+                    recovery.action is RecoveryAction.FAIL
+                    or attempt == self._max_recoveries
+                ):
+                    raise
+                if recovery.action is RecoveryAction.HANDOFF:
+                    await self._handoff.resolve(failure)
+                elif recovery.action is RecoveryAction.RETRY and recovery.delay:
+                    await asyncio.sleep(recovery.delay.total_seconds())
 
         raise AssertionError("unreachable")

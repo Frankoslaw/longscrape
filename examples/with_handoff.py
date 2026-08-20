@@ -1,36 +1,37 @@
-"""Manually hand off a blocked fetch to a headed browser.
+"""Manually recover a JS-rendered login page before extracting its content.
 
 Run from the repository root:
 
     uv run --with playwright playwright install chromium
-    uv run --with playwright python examples/with_handoff.py
+    uv run --with playwright python -m examples.with_handoff
 
-If the initial headless request shows ``Login``, ``ManualHandoff`` opens a
-headed browser with the same session. Log in and press Enter (or wait two
-minutes); ``HandoffFetcher`` then retries with the updated session.
+The first headless request loads the delayed page and verifies that the account
+link says ``Logout``. If it says ``Login``, the recovery policy asks
+``ManualHandoff`` to open the same session in a headed browser. Log in there,
+press Enter, and the fetcher retries with the copied session state.
 """
 
 import asyncio
 
 from longscrape import (
     Document,
-    FetchFailure,
-    FetchFailureKind,
     InputUrl,
     Job,
 )
 from longscrape.browser import BrowserConfig, BrowserManager, ManualHandoff
 from longscrape.browser.provider import PlaywrightBrowserProvider
-from longscrape.fetchers import BrowserFetcher, HandoffFetcher
+from longscrape.fetchers import BrowserFetcher, FetcherBuilder
 from parsel import Selector
 
 URL = "https://quotes.toscrape.com/"
-LOGIN_STATUS = (
-    "div.row:nth-child(1) > div:nth-child(2) > p:nth-child(1) > a:nth-child(1)"
-)
+LOGIN_STATUS = ".col-md-4 > p:nth-child(1) > a:nth-child(1)"
 
 
-def login_detector(document: Document, job: Job) -> FetchFailure | None:
+class LoginRequiredError(Exception):
+    pass
+
+
+def login_detector(document: Document, job: Job) -> Exception | None:
     status = (
         Selector(text=document.content.decode(errors="replace"))
         .css(f"{LOGIN_STATUS}::text")
@@ -38,13 +39,13 @@ def login_detector(document: Document, job: Job) -> FetchFailure | None:
         .strip()
         .lower()
     )
-    if "logout" in status:
+    if status == "logout":
         return None
-    return FetchFailure(
-        FetchFailureKind.BLOCKED,
-        f"Login-status link did not contain Logout: {status!r}",
-        url=document.url,
-    )
+    return LoginRequiredError(f"Account link showed {status!r}, not 'Logout'")
+
+
+async def wait_for_quotes(page: object) -> None:
+    await page.wait_for_selector(".quote")  # type: ignore[attr-defined]
 
 
 async def main() -> None:
@@ -57,14 +58,20 @@ async def main() -> None:
     await browser.start()
     await handoff_browser.start()
     try:
-        fetcher = HandoffFetcher(
-            BrowserFetcher(browser),
-            detector=login_detector,
-            handoff=ManualHandoff(browser, handoff_browser),
+        fetcher = (
+            FetcherBuilder()
+            .base(BrowserFetcher(browser, page_ready=wait_for_quotes))
+            .handoff(
+                detector=login_detector,
+                handoff_strategy=ManualHandoff(browser, handoff_browser),
+            )
+            .retry(max_retries=3)
+            .build()
         )
-        job = Job("quotes", InputUrl(URL))
-        documents = [document async for document in fetcher.fetch(job)]
-        print(f"Session handoff succeeded; fetched {documents[0].url}")
+        documents = [
+            document async for document in fetcher.fetch(Job("quotes", InputUrl(URL)))
+        ]
+        print(f"Logged-in session fetched {documents[0].url}")
     finally:
         await handoff_browser.stop()
         await browser.stop()

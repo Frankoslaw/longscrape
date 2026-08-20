@@ -1,22 +1,12 @@
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
 
-from longscrape_core import (
-    Document,
-    Fetcher,
-    InputUrl,
-    Job,
-    PipelineContext,
-)
+from longscrape_core import CollisionPolicy, Document, Fetcher, Job, PipelineContext
 from longscrape_core.protocols import DocumentStore
 
 
-def _url_key(job: Job) -> str:
-    if not isinstance(job.input, InputUrl):
-        raise TypeError(
-            "CachedFetcher requires an InputUrl input unless cache_key is provided"
-        )
-    return job.input.url
+def _job_key(job: Job) -> str:
+    return job.hash
 
 
 class CachedFetcher:
@@ -25,7 +15,7 @@ class CachedFetcher:
         fetcher: Fetcher | None,
         store: DocumentStore,
         *,
-        cache_key: Callable[[Job], str] = _url_key,
+        cache_key: Callable[[Job], str] = _job_key,
         read: bool = True,
         write: bool = True,
         max_age: timedelta | None = None,
@@ -42,7 +32,8 @@ class CachedFetcher:
     async def fetch(
         self, job: Job, context: PipelineContext | None = None
     ) -> AsyncIterator[Document]:
-        cached = await self._store.load(self._cache_key(job)) if self._read else None
+        ref = await self._store.latest(self._cache_key(job)) if self._read else None
+        cached = await self._store.get(ref) if ref is not None else None
         if cached is not None and self._is_fresh(cached):
             yield cached
             return
@@ -52,7 +43,11 @@ class CachedFetcher:
 
         async for document in self._fetcher.fetch(job, context):
             if self._write:
-                await self._store.store(document, key=self._cache_key(job))
+                await self._store.put(
+                    document,
+                    key=self._cache_key(job),
+                    policy=CollisionPolicy.OVERWRITE,
+                )
             yield document
 
     def _is_fresh(self, document: Document) -> bool:

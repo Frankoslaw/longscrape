@@ -33,7 +33,7 @@ browser.runtime.onMessage.addListener(async (message) => {
   } catch (error) {
     console.warn(
       `Browser capture was not delivered to ${receiverEndpoint}. Start the receiver with ` +
-      "`uv run uvicorn --app-dir examples/browser-plugin linkedin:app --host " +
+      "`uv run uvicorn examples.browser_plugin.linkedin:app --host " +
       "127.0.0.1 --port 8000`.",
       error,
     );

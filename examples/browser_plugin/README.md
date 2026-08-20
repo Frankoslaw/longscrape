@@ -13,7 +13,7 @@ selection live in its settings.
 Run the receiver:
 
 ```bash
-uv run uvicorn --app-dir examples/browser-plugin linkedin:app --host 127.0.0.1 --port 8000
+uv run uvicorn examples.browser_plugin.linkedin:app --host 127.0.0.1 --port 8000
 ```
 
 Each extracted record is printed by the receiver and the extension logs the

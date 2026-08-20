@@ -1,24 +1,21 @@
 """Receive browser captures and extract public LinkedIn page content.
 
-Run with ``uv run uvicorn --app-dir examples/browser-plugin linkedin:app``.
+Run with ``uv run uvicorn examples.browser_plugin.linkedin:app``.
 This educational example is not production-ready. LinkedIn is a protected site;
 automated collection may violate its Terms of Service. Use only with explicit
 authorisation and at your own risk.
 """
 
 import json
-import sys
 from collections.abc import AsyncIterable, AsyncIterator
-from pathlib import Path
+from typing import cast
 from urllib.parse import urljoin
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from common import close_store, get_record_store
 from longscrape import (
+    CollisionPolicy,
     Document,
+    DocumentInput,
     Extractor,
-    InputDocument,
     Job,
     PipelineContext,
     Record,
@@ -26,10 +23,13 @@ from longscrape import (
 from longscrape.capture import BrowserCapture, BrowserCaptureServer
 from parsel import Selector
 
+from ..common import close_store, get_document_store, get_record_store
+
 SEARCH_KIND = "linkedin.people-search"
 PROFILE_KIND = "linkedin.profile"
 people_store = get_record_store("linkedin_people")
 profile_store = get_record_store("linkedin_profiles")
+document_store = get_document_store()
 
 
 def text(values: list[str]) -> str:
@@ -104,9 +104,10 @@ async def handle_capture(capture: BrowserCapture) -> AsyncIterator[Record]:
         content=capture.content.encode("utf-8"),
         content_type=capture.content_type,
     )
+    ref = await document_store.put(document, key=f"{capture.kind}:{document.url}")
     job = Job(
         kind=capture.kind,
-        input=InputDocument(document),
+        input=DocumentInput(ref),
         metadata=capture.context,
     )
     match capture.kind:
@@ -119,9 +120,15 @@ async def handle_capture(capture: BrowserCapture) -> AsyncIterator[Record]:
 
     async for record in records:
         if record.kind == "person":
-            await people_store.store(record)
+            await people_store.put(
+                record,
+                key=cast(str, record.data["profile_url"]),
+                policy=CollisionPolicy.MERGE,
+            )
         else:
-            await profile_store.store(record)
+            await profile_store.put(
+                record, key=document.url, policy=CollisionPolicy.MERGE
+            )
         print(json.dumps(record.data, ensure_ascii=False))
         yield record
 
@@ -132,5 +139,6 @@ app = capture_server.app
 
 @app.on_event("shutdown")
 async def close_stores() -> None:
+    await close_store(document_store)
     await close_store(people_store)
     await close_store(profile_store)

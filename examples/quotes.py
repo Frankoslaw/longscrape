@@ -3,7 +3,6 @@ from collections.abc import AsyncIterable, AsyncIterator
 from urllib.parse import urljoin
 
 import httpx
-from common import close_store, get_document_store, get_record_store
 from longscrape import (
     Document,
     Extractor,
@@ -14,9 +13,16 @@ from longscrape import (
     Record,
     RecordSink,
 )
-from longscrape.fetchers import CachedFetcher, HttpxFetcher, RateLimitedFetcher
-from longscrape.runtime import Flow, InMemoryJobQueue, LeakyBucketRateLimiter
+from longscrape.fetchers import FetcherBuilder, HttpxFetcher
+from longscrape.runtime import (
+    Flow,
+    FlowRouter,
+    InMemoryJobQueue,
+    StoredJobQueue,
+)
 from parsel import Selector
+
+from .common import close_store, get_document_store, get_job_store, get_record_store
 
 QUOTES = "quotes-page"
 AUTHOR = "author-page"
@@ -78,7 +84,8 @@ class AuthorExtractor(Extractor):
 
 
 async def main() -> None:
-    job_queue = InMemoryJobQueue()
+    job_store = get_job_store()
+    job_queue = StoredJobQueue(InMemoryJobQueue(), job_store)
     context = PipelineContext(job_queue)
     await job_queue.submit(JobRequest(QUOTES, InputUrl(START_URL)))
 
@@ -90,26 +97,26 @@ async def main() -> None:
     async with httpx.AsyncClient(follow_redirects=True) as http:
         document_store = get_document_store()
 
-        fetcher = CachedFetcher(
-            RateLimitedFetcher(
-                HttpxFetcher(http),
-                LeakyBucketRateLimiter(requests_per_second=2),
-            ),
-            document_store,
+        fetcher = (
+            FetcherBuilder()
+            .base(HttpxFetcher(http))
+            .rate_limit(requests_per_second=2)
+            .cache(document_store)
+            .build()
         )
 
         quotes_flow = (
             Flow(context)
             .fetch(fetcher)
             .extract(QuotesExtractor())
-            .consume(quote_sink)
+            .transform(quote_sink)
             .build()
         )
         author_flow = (
             Flow(context)
             .fetch(fetcher)
             .extract(AuthorExtractor())
-            .consume(author_sink)
+            .transform(author_sink)
             .build()
         )
 
@@ -119,16 +126,10 @@ async def main() -> None:
         }
 
         try:
-            while not job_queue.empty():
-                job = await job_queue.get()
-                flow = flows.get(job.kind)
-                if flow is None:
-                    continue
-                async for _ in flow(job):
-                    pass
-
+            await FlowRouter(flows, job_store=job_store).run(job_queue)
         finally:
             await close_store(document_store)
+            await close_store(job_store)
             await close_store(quote_store)
             await close_store(author_store)
 

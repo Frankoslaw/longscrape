@@ -1,115 +1,231 @@
 # longscrape
 
 > [!WARNING]
-> The canonical repository and place to report issues is
+> The canonical repository and issue tracker are at
 > [forgejo.frankoslaw.top/frankoslaw/longscrape](https://forgejo.frankoslaw.top/frankoslaw/longscrape).
-> [Frankoslaw/longscrape](https://github.com/Frankoslaw/longscrape) is a read-only GitHub mirror.
+> GitHub is a read-only mirror.
 
-> [!CAUTION]
-> This library is in alpha and its API may change.
-
-`longscrape` is an asynchronous scraping toolkit built from small, composable
-pipeline stages:
+`longscrape` is an async, composable scraping toolkit. It supplies small
+components for fetching, extraction, persistence, browser automation, and
+optional durable execution. It does not hide a crawler runtime behind a
+framework.
 
 ```text
 Job → Fetcher → Document → Extractor → Record → Transformer
                     └──────────────→ JobRequest (follow-up work)
 ```
 
-The stable domain types and pipeline contracts live in `longscrape-core`.
-`longscrape` provides practical adapters such as HTTP and browser fetchers,
-cache and rate-limit decorators, document stores, and a browser-capture server.
+`longscrape-core` contains the immutable domain values and lightweight stage
+protocols. The main package adds HTTP and browser fetchers, fetcher decorators,
+stores, a linear `Flow` builder, local development helpers, and a Dramatiq
+adapter.
 
 ## Install
+
+For development in this repository:
 
 ```bash
 uv sync
 ```
 
-Optional adapters:
+For an application, install the package with only the adapters it uses:
 
 ```bash
-uv sync --extra browser  # built-in Playwright browser provider
-uv sync --extra mongodb     # MongoDB document store
+uv add longscrape                         # HTTP fetching and HTML selection
+uv add 'longscrape[browser]'              # Playwright browser provider
+uv add 'longscrape[mongodb]'              # PyMongo stores
+uv add 'longscrape[dramatiq]'             # Redis-backed Dramatiq execution
+uv add 'longscrape[structlog,otel]'       # optional observability adapters
 ```
 
-Browser implementations are pluggable: install a compatible library such as
-Patchright or Camoufox in your application, then pass its provider to
-`BrowserManager`. Longscrape does not declare or version-pin those libraries.
-See [the Patchright example](examples/custom_browser.py).
+The `browser-capture` extra provides the optional FastAPI receiver used by the
+browser-extension example. Browser binaries are installed separately:
 
-## A pipeline
+```bash
+uv run playwright install chromium
+```
 
-Create a `Job`, pass it to a fetcher, and pass the document stream to an
-extractor. Each stage is an async iterable, so records are handled as soon as
-they are available.
+## Build a streaming flow
+
+Stages exchange async iterables. A record can therefore be consumed as soon as
+the extractor produces it, without buffering a whole crawl.
 
 ```python
 import httpx
 
-from longscrape import InputUrl, Job
+from longscrape import InputUrl, Job, JobRequest
 from longscrape.fetchers import HttpxFetcher
+from longscrape.runtime import Flow
 
-job = Job("article", InputUrl("https://example.com/article"))
-async with httpx.AsyncClient() as http:
-    documents = HttpxFetcher(http).fetch(job)
-    async for record in ArticleExtractor().extract(documents, job):
+async with httpx.AsyncClient() as client:
+    flow = Flow().fetch(HttpxFetcher(client)).extract(ArticleExtractor()).build()
+    job = Job.spawn_job(JobRequest("article", InputUrl("https://example.com")))
+    async for record in flow(job):
         print(record.data)
 ```
 
-An extractor receives `documents`, `job`, and an optional `PipelineContext`.
-Yield `Record` values and use
-`await context.submit_child(job, JobRequest(...))` for discovered work. The
-quotes example shows a minimal in-memory queue bound to one pipeline context.
+`Fetcher`, `Extractor`, and `Transformer` are protocols, so ordinary classes
+that expose the expected async-iterator method compose directly.
+Use `.transform(...)` for both record transforms and terminal sinks such as
+`RecordSink`; a sink simply yields no records.
 
-Decorators compose around any fetcher:
+Give `Flow` a `PipelineContext` when stages need process-local capabilities,
+such as submitting a child job or sharing a live browser page:
 
 ```python
-fetcher = RateLimitedFetcher(
-    CachedFetcher(HttpxFetcher(http), InMemoryDocumentStore()),
-    LeakyBucketRateLimiter(requests_per_second=1),
+context = PipelineContext(submitter)
+flow = Flow(context).fetch(fetcher).extract(extractor).transform(sink).build()
+```
+
+`JobRequest` is the input for root or child work; `Job.spawn_job(request)`
+creates a root job. Inside an extractor, use
+`await context.submit_child(job, JobRequest(...))` to preserve the parent and
+root lineage.
+
+## Fetcher composition
+
+Use the fetchers directly for a single concern, or use `FetcherBuilder` to make
+the decorator order explicit:
+
+```python
+from datetime import timedelta
+
+from longscrape.fetchers import FetcherBuilder
+
+fetcher = (
+    FetcherBuilder()
+    .base(HttpxFetcher(client))
+    .rate_limit(requests_per_second=2)
+    .cache(document_store, max_age=timedelta(hours=1))
+    .build()
 )
 ```
 
-`CachedFetcher` uses an `InputUrl` as its default key. Use its `read`, `write`,
-and `max_age` options to control cache behaviour.
+`CachedFetcher` can also run without a fallback fetcher, which is useful for
+re-extracting documents that are already in a store:
+
+```python
+cached_only = FetcherBuilder().cache(document_store, write=False).build()
+```
+
+`HandoffFetcher` runs an application-defined recovery step, such as a manual
+browser login, when a failure policy chooses `HANDOFF`. `RetryingFetcher` is
+available for a small local retry loop; durable retries and delays belong in
+Dramatiq for production work.
+
+## Stores and local queues
+
+Document and record stores use opaque references plus stable keys. Documents
+are versioned; records can be keyed and replaced according to
+`CollisionPolicy`. In-memory stores are useful for scripts and tests;
+`PyMongoDocumentStore`, `PyMongoRecordStore`, and `PyMongoJobStore` are
+available with the MongoDB extra.
+
+For small scripts or notebooks, `InMemoryJobQueue` and `FlowRouter` provide a
+simple way to drain a finite set of jobs. Wrap the queue in `StoredJobQueue`
+with a `JobStore` to register accepted work and track its state:
+
+```python
+from longscrape import InputUrl, JobRequest, PipelineContext
+from longscrape.runtime import Flow, FlowRouter, InMemoryJobQueue, StoredJobQueue
+
+queue = StoredJobQueue(InMemoryJobQueue(), job_store)
+context = PipelineContext(queue)
+await queue.submit(JobRequest("article", InputUrl("https://example.com")))
+await FlowRouter({"article": Flow(context).fetch(fetcher).extract(extractor).build()}).run(queue)
+```
+
+This local runner intentionally stays small. Use Dramatiq when jobs need
+durability, delayed scheduling, retries, or multiple workers.
+
+## Dramatiq execution
+
+Install `longscrape[dramatiq]`, run Redis, and register flow factories at
+module import time. `PipelineContext` is supplied by the adapter, so child-job
+submission automatically targets the broker.
+
+```python
+from longscrape import InputUrl, JobRequest
+from longscrape.orchestration import DramatiqApp, dramatiq_retries
+from longscrape.runtime import Flow
+
+app = DramatiqApp.redis(url="redis://localhost:6379/0")
+
+@app.flow(kind="article", queue="scrape")
+@dramatiq_retries(policy=policy, max_retries=3)
+def article(context):
+    return Flow(context).fetch(fetcher).extract(extractor).transform(sink).build()
+
+await app.submit(JobRequest("article", InputUrl("https://example.com")))
+```
+
+Run the worker with `dramatiq your_module`. `RecoveryPolicy` decides whether a
+failed observed stage should retry or fail; Dramatiq owns the backoff and job
+delivery. `dramatiq_retries` intentionally keeps that recovery configuration
+separate from job-kind and queue registration. A worker can be given a stable
+`worker_id` through `DramatiqApp.redis` to process page-affine jobs on its own
+queue.
+
+## Browser fetching and page reuse
+
+`BrowserManager` works with the built-in `PlaywrightBrowserProvider` or an
+application-owned provider that implements the same small protocol. Pass a
+`page_ready` coroutine to `BrowserFetcher` to wait for application-specific
+content after navigation.
+
+`BrowserFetcher(page_mode="reuse")` takes the live page from
+`PipelineContext`; `page_mode="stored"` restores a page ID from job metadata.
+Both modes are process-local. When passing a page ID to a child job, pin that
+job to the browser-owning worker with `worker_id=context.require_worker_id()`.
+They are not durable browser-session resume mechanisms.
+
+The browser module also includes composable request middlewares for URL/content
+blocking, caching, and rate limiting. See the page reuse and custom-provider
+examples below for complete setups.
+
+## Failures and observability
+
+Pipeline stages ordinarily raise their own errors. Wrap a stage with
+`observe_fetcher`, `observe_extractor`, or `observe_transformer`—or pass
+observers to `Flow`—to receive lifecycle callbacks. Escaped stage errors then
+become `StageExecutionError`, with structured `.failure` and `.error` fields;
+the original exception remains its `__cause__`.
+
+```python
+class ErrorLogger:
+    async def on_stage_failed(self, failure):
+        logger.error("%s: %s", failure.stage.value, failure.error)
+
+flow = Flow(observers=[ErrorLogger()]).fetch(fetcher).extract(extractor).build()
+```
+
+`LoggingObserver` needs only the standard library. `StructlogObserver` and
+`OpenTelemetryObserver` are opt-in adapters and work both with `Flow` and with
+manually composed stages. Configure logging and OpenTelemetry exporters in the
+application, not in the library.
+
+`HttpxFetcher` and `BrowserFetcher` raise `HttpStatusError` for unsuccessful
+responses. For HTTP 429, `HttpxFetcher` parses `Retry-After` into
+`error.retry_after`, which a `RecoveryPolicy` can use when choosing a retry.
 
 ## Examples
 
-### Quotes crawler
+Run these from the repository root:
 
-[examples/quotes.py](examples/quotes.py) follows quote and author pages with a
-`JobRequest` queue. It combines the HTTP fetcher with cache and per-domain rate
-limiting. Set `MONGODB_URI` to persist documents; otherwise it uses an
-in-memory store. With MongoDB configured, extracted quote and author records
-are written to separate `quotes` and `authors` collections through
-`PyMongoRecordStore` and `RecordSink`.
-
-```bash
-uv run python examples/quotes.py
-```
-
-### Re-extract cached quotes
-
-[examples/reextract.py](examples/reextract.py) runs the quote and author
-extractors over cached MongoDB documents, without making HTTP requests. It is a
-no-op with the default in-memory store because that store does not survive a
-separate process.
-
-```bash
-docker compose -f compose.dev.yml up -d
-MONGODB_URI=mongodb://localhost:27017 uv run --extra mongodb python examples/quotes.py
-MONGODB_URI=mongodb://localhost:27017 uv run --extra mongodb python examples/reextract.py
-```
-
-### Browser captures
-
-[examples/browser-plugin](examples/browser-plugin) contains a temporary Firefox
-extension and a local receiver. `BrowserCaptureServer` turns captured HTML into
-the application-defined capture handler. The handler can construct a job and
-route it to an extractor with ordinary Python control flow; no fetcher is
-needed. Use it only for pages and data you are authorised to process.
-
-```bash
-uv run uvicorn --app-dir examples/browser-plugin linkedin:app --host 127.0.0.1 --port 8000
-```
+- `uv run python -m examples.quotes` — a local queue, crawling follow-up jobs,
+  cache, rate limiting, sinks, and optional MongoDB stores (`MONGODB_URI`).
+- `uv run python -m examples.reextract` — extract stored documents without
+  fetching again; set `MONGODB_URI` after running the quotes example.
+- `uv run --extra browser python -m examples.reuse_page` — pass one live
+  Playwright page between two local flows.
+- `uv run --with patchright python -m examples.custom_browser` — supply a
+  custom Patchright browser provider without coupling it to the package.
+- `uv run --extra browser python -m examples.with_handoff` — recover a browser
+  session through a headed manual login.
+- `uv run --package longscrape --extra structlog --extra otel python -m examples.observability --structlog --otel`
+  — standard logging, Structlog events, and OpenTelemetry spans.
+- `uv run --package longscrape --extra dramatiq dramatiq examples.orchestration`
+  — worker for the Redis/Dramatiq orchestration example; in another terminal,
+  run `uv run --package longscrape --extra dramatiq python -m examples.orchestration`.
+- `examples/browser_plugin` — a temporary Firefox extension and receiver for
+  explicitly authorized browser captures; see its own README.

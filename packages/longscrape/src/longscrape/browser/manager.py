@@ -4,6 +4,7 @@ from typing import Any, AsyncIterator
 
 from longscrape.browser._protocols import BrowserMiddleware
 from longscrape.browser.config import BrowserConfig
+from longscrape.browser.page_store import PageStore
 from longscrape.browser.provider import BrowserProvider
 
 USER_AGENT = (
@@ -27,6 +28,7 @@ class BrowserManager:
         self._context: Any | None = None
         self._lock = asyncio.Lock()
         self.middlewares: list[BrowserMiddleware] = []
+        self.page_store = PageStore()
 
     async def start(self) -> None:
         await self.provider.start()
@@ -61,6 +63,7 @@ class BrowserManager:
         return context
 
     async def stop(self) -> None:
+        await self.page_store.close_all()
         if self._context:
             await self._context.close()
         if self._browser:
@@ -73,6 +76,14 @@ class BrowserManager:
                 "Browser context is not initialized. Call start() before create_page()."
             )
         return await self._context.new_page()
+
+    def store_page(self, page: Any) -> str:
+        """Keep a live page available to a later job and return its opaque ID."""
+        return self.page_store.put(page)
+
+    def restore_page(self, page_id: str) -> Any:
+        """Restore a live page previously stored by ``store_page``."""
+        return self.page_store.require(page_id)
 
     async def storage_state(self) -> Any:
         if self._context is None:

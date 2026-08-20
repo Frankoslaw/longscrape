@@ -3,7 +3,7 @@
 import asyncio
 from datetime import timedelta
 
-from longscrape_core import Document, FetchFailure, Job
+from longscrape_core import PipelineFailure
 
 from longscrape.browser.manager import BrowserManager
 
@@ -24,19 +24,16 @@ class ManualHandoff:
         self._handoff_browser = handoff_browser
         self._timeout = timeout
 
-    async def resolve(
-        self,
-        *,
-        job: Job,
-        document: Document,
-        failure: FetchFailure,
-    ) -> None:
+    async def resolve(self, failure: PipelineFailure) -> None:
+        url = getattr(failure.job.input, "url", None)
+        if url is None:
+            raise TypeError("ManualHandoff requires a URL job input")
         async with self._browser.locked():
             storage_state = await self._browser.storage_state()
             await self._handoff_browser.replace_context(storage_state=storage_state)
             page = await self._handoff_browser.create_page()
             try:
-                await page.goto(document.url)
+                await page.goto(url)
                 await self._wait_for_user()
                 updated_state = await self._handoff_browser.storage_state()
             finally:

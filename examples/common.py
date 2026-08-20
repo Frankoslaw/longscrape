@@ -1,7 +1,11 @@
 import os
 
-from longscrape import DocumentStore, RecordStore
-from longscrape.stores import InMemoryDocumentStore, InMemoryRecordStore
+from longscrape import DocumentStore, JobStore, RecordStore
+from longscrape.stores import (
+    InMemoryDocumentStore,
+    InMemoryJobStore,
+    InMemoryRecordStore,
+)
 
 
 def get_document_store() -> DocumentStore:
@@ -26,7 +30,18 @@ def get_record_store(kind: str) -> RecordStore:
     return InMemoryRecordStore()
 
 
-async def close_store(store: DocumentStore | RecordStore) -> None:
+def get_job_store() -> JobStore:
+    if mongo_uri := os.getenv("MONGODB_URI"):
+        from longscrape.stores import PyMongoJobStore
+
+        print("Using MongoDB backed job store")
+        return PyMongoJobStore(mongo_uri)
+
+    print("Using in memory job store")
+    return InMemoryJobStore()
+
+
+async def close_store(store: DocumentStore | JobStore | RecordStore) -> None:
     close = getattr(store, "close", None)
     if close is not None:
         await close()

@@ -1,6 +1,6 @@
 """Small, reusable job flows built from the core stage protocols."""
 
-from collections.abc import AsyncIterable, Callable
+from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterable
 from typing import Self
 
 from longscrape_core import (
@@ -9,10 +9,16 @@ from longscrape_core import (
     Job,
     PipelineContext,
     Record,
+    StageObserver,
     Transformer,
+    observe_extractor,
+    observe_fetcher,
+    observe_transformer,
 )
 
 type RecordFlow = Callable[[Job], AsyncIterable[Record]]
+
+__all__ = ["Flow", "RecordFlow"]
 
 
 class Flow:
@@ -22,8 +28,14 @@ class Flow:
     flows always return an ``AsyncIterable[Record]``.
     """
 
-    def __init__(self, context: PipelineContext | None = None) -> None:
+    def __init__(
+        self,
+        context: PipelineContext | None = None,
+        *,
+        observers: Iterable[StageObserver] = (),
+    ) -> None:
         self._context = context
+        self._observers = tuple(observers)
         self._fetcher: Fetcher | None = None
         self._extractor: Extractor | None = None
         self._transformers: list[Transformer] = []
@@ -49,9 +61,6 @@ class Flow:
         self._transformers.append(transformer)
         return self
 
-    def consume(self, sink: Transformer) -> Self:
-        return self.transform(sink)
-
     def build(self) -> RecordFlow:
         self._require_records()
         assert self._fetcher is not None
@@ -60,13 +69,19 @@ class Flow:
         extractor = self._extractor
         transformers = tuple(self._transformers)
         context = self._context
+        observers = self._observers
 
-        def run(job: Job) -> AsyncIterable[Record]:
-            documents = fetcher.fetch(job, context)
-            records = extractor.extract(documents, job, context)
+        async def run(job: Job) -> AsyncIterator[Record]:
+            documents = observe_fetcher(fetcher, *observers).fetch(job, context)
+            records = observe_extractor(extractor, *observers).extract(
+                documents, job, context
+            )
             for transformer in transformers:
-                records = transformer.transform(records, job, context)
-            return records
+                records = observe_transformer(transformer, *observers).transform(
+                    records, job, context
+                )
+            async for record in records:
+                yield record
 
         return run
 

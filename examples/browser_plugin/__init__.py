@@ -1,0 +1,1 @@
+"""Browser capture example package."""
