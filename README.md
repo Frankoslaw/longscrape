@@ -69,6 +69,36 @@ that expose the expected async-iterator method compose directly.
 Use `.transform(...)` for both record transforms and terminal sinks such as
 `RecordSink`; a sink simply yields no records.
 
+## Optional record typing
+
+`Flow` is immutable and carries record shapes from extractors through
+transformers and sinks. Type annotations remain optional; untyped stages
+compose as `Any`. `TypedDict` works well for JSON-compatible stored records:
+
+```python
+from typing import TypedDict
+
+from longscrape import Extractor, Record, Transformer
+from longscrape.runtime import Flow
+
+class Article(TypedDict):
+    title: str
+
+class Summary(TypedDict):
+    summary: str
+
+class ToSummary(Transformer[Article, Summary]):
+    async def transform(self, records, job, context=None):
+        async for record in records:
+            yield Record[Summary]("summary", {"summary": record.data["title"]})
+
+flow = Flow().fetch(fetcher).extract(article_extractor).transform(ToSummary())
+```
+
+The type checker can now reject a transformer or `RecordSink` that expects a
+different record shape. See [`examples/typed_records.py`](examples/typed_records.py)
+for a complete runnable pipeline.
+
 Give `Flow` a `PipelineContext` when stages need process-local capabilities,
 such as submitting a child job or sharing a live browser page:
 

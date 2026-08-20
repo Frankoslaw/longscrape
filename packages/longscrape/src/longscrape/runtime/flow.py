@@ -1,7 +1,7 @@
 """Small, reusable job flows built from the core stage protocols."""
 
 from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterable
-from typing import Self
+from typing import Any, cast
 
 from longscrape_core import (
     Extractor,
@@ -16,16 +16,16 @@ from longscrape_core import (
     observe_transformer,
 )
 
-type RecordFlow = Callable[[Job], AsyncIterable[Record]]
+type RecordFlow[T] = Callable[[Job], AsyncIterable[Record[T]]]
 
 __all__ = ["Flow", "RecordFlow"]
 
 
 class Flow:
-    """Build a linear fetch/extract/transform flow bound to local context.
+    """Start an immutable, optionally typed linear pipeline builder.
 
-    A consumer such as ``RecordSink`` is a zero-output transformer, so built
-    flows always return an ``AsyncIterable[Record]``.
+    Record types are inferred from the extractor and carried through each
+    transformer. Untyped stages remain supported as ``Any``-typed stages.
     """
 
     def __init__(
@@ -36,55 +36,67 @@ class Flow:
     ) -> None:
         self._context = context
         self._observers = tuple(observers)
-        self._fetcher: Fetcher | None = None
-        self._extractor: Extractor | None = None
-        self._transformers: list[Transformer] = []
 
-    def fetch(self, fetcher: Fetcher) -> Self:
-        if self._fetcher is not None:
-            raise ValueError("A flow can have only one fetcher")
-        if self._extractor is not None:
-            raise ValueError("fetch() must precede extract()")
+    def fetch(self, fetcher: Fetcher) -> _FetchedFlow:
+        return _FetchedFlow(fetcher, self._context, self._observers)
+
+
+class _FetchedFlow:
+    def __init__(
+        self,
+        fetcher: Fetcher,
+        context: PipelineContext | None,
+        observers: tuple[StageObserver, ...],
+    ) -> None:
         self._fetcher = fetcher
-        return self
+        self._context = context
+        self._observers = observers
 
-    def extract(self, extractor: Extractor) -> Self:
-        if self._fetcher is None:
-            raise ValueError("extract() requires fetch() first")
-        if self._extractor is not None:
-            raise ValueError("A flow can have only one extractor")
+    def extract[Out](self, extractor: Extractor[Out]) -> _RecordFlow[Out]:
+        return _RecordFlow(self._fetcher, extractor, (), self._context, self._observers)
+
+
+class _RecordFlow[T]:
+    def __init__(
+        self,
+        fetcher: Fetcher,
+        extractor: Extractor[Any],
+        transformers: tuple[Transformer[Any, Any], ...],
+        context: PipelineContext | None,
+        observers: tuple[StageObserver, ...],
+    ) -> None:
+        self._fetcher = fetcher
         self._extractor = extractor
-        return self
+        self._transformers = transformers
+        self._context = context
+        self._observers = observers
 
-    def transform(self, transformer: Transformer) -> Self:
-        self._require_records()
-        self._transformers.append(transformer)
-        return self
+    def transform[Out](self, transformer: Transformer[T, Out]) -> _RecordFlow[Out]:
+        return _RecordFlow(
+            self._fetcher,
+            self._extractor,
+            (*self._transformers, transformer),
+            self._context,
+            self._observers,
+        )
 
-    def build(self) -> RecordFlow:
-        self._require_records()
-        assert self._fetcher is not None
-        assert self._extractor is not None
+    def build(self) -> RecordFlow[T]:
         fetcher = self._fetcher
         extractor = self._extractor
-        transformers = tuple(self._transformers)
+        transformers = self._transformers
         context = self._context
         observers = self._observers
 
-        async def run(job: Job) -> AsyncIterator[Record]:
+        async def run(job: Job) -> AsyncIterator[Record[T]]:
             documents = observe_fetcher(fetcher, *observers).fetch(job, context)
-            records = observe_extractor(extractor, *observers).extract(
-                documents, job, context
-            )
+            records: AsyncIterable[Record[Any]] = observe_extractor(
+                extractor, *observers
+            ).extract(documents, job, context)
             for transformer in transformers:
                 records = observe_transformer(transformer, *observers).transform(
                     records, job, context
                 )
             async for record in records:
-                yield record
+                yield cast(Record[T], record)
 
         return run
-
-    def _require_records(self) -> None:
-        if self._fetcher is None or self._extractor is None:
-            raise ValueError("A flow requires fetch() followed by extract()")

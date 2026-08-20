@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterable
 from datetime import timedelta
-from typing import Callable, Protocol
+from typing import Any, Callable, Never, Protocol
 from uuid import UUID
 
 from longscrape_core.context import JobSubmitter, PipelineContext
@@ -42,26 +42,26 @@ class Fetcher(Protocol):
     ) -> AsyncIterable[Document]: ...
 
 
-class Extractor(Protocol):
+class Extractor[Out](Protocol):
     def extract(
         self,
         documents: AsyncIterable[Document],
         job: Job,
         context: PipelineContext | None = None,
-    ) -> AsyncIterable[Record]: ...
+    ) -> AsyncIterable[Record[Out]]: ...
 
 
 # NOTE: Earlier versions of api also exposed separate sink api with write method that
 # sat at the end of pipelines. But transformer that emits 0 items at the end effectively
 # provides same terminating behavior for both native longscrape usage and future
 # longscrape-scrapy integration.
-class Transformer(Protocol):
+class Transformer[In, Out](Protocol):
     def transform(
         self,
-        records: AsyncIterable[Record],
+        records: AsyncIterable[Record[In]],
         job: Job,
         context: PipelineContext | None = None,
-    ) -> AsyncIterable[Record]: ...
+    ) -> AsyncIterable[Record[Out]]: ...
 
 
 class RecoveryPolicy(Protocol):
@@ -100,23 +100,23 @@ class RecordStore(Protocol):
 
     async def put(
         self,
-        record: Record,
+        record: Record[Any],
         *,
         key: str | None = None,
         policy: CollisionPolicy = CollisionPolicy.NEW,
     ) -> RecordRef: ...
-    async def get(self, ref: RecordRef) -> Record: ...
+    async def get(self, ref: RecordRef) -> Record[Any]: ...
     async def latest(self, key: str) -> RecordRef | None: ...
 
 
 # TODO: In future consider buffered sink to support batched writes instead of spamming
 # the database with small records
-class RecordSink(Transformer):
+class RecordSink[In](Transformer[In, Never]):
     def __init__(
         self,
         store: RecordStore,
         *,
-        key: Callable[[Record, Job], str] | None = None,
+        key: Callable[[Record[In], Job], str] | None = None,
         policy: CollisionPolicy = CollisionPolicy.NEW,
     ) -> None:
         self._store = store
@@ -125,10 +125,10 @@ class RecordSink(Transformer):
 
     async def transform(
         self,
-        records: AsyncIterable[Record],
+        records: AsyncIterable[Record[In]],
         job: Job,
         context: PipelineContext | None = None,
-    ) -> AsyncIterable[Record]:
+    ) -> AsyncIterable[Record[Never]]:
         async for record in records:
             await self._store.put(
                 record,
