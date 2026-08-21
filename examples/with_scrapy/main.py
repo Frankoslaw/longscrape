@@ -15,20 +15,16 @@ import os
 
 from longscrape import InputUrl, Job, JobRequest, PipelineContext
 from longscrape.orchestration import DramatiqApp
+from longscrape_scrapy import ScrapyJobRunner
+from with_scrapy.spiders.quotes_longscrape import QuotesLongscrapeSpider
 
 KIND = "quotes_longscrape"
 app = DramatiqApp.redis(url=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+runner = ScrapyJobRunner.from_scrapy_project()
 
 
 @app.job(kind=KIND, queue="scrapy")
 async def quotes(job: Job, context: PipelineContext) -> None:
-    # Import Scrapy only when a durable job has actually arrived.  Dramatiq
-    # worker startup should otherwise register actors without constructing a
-    # Scrapy project, settings object, or crawler.
-    from longscrape_scrapy import ScrapyJobRunner
-    from with_scrapy.spiders.quotes_longscrape import QuotesLongscrapeSpider
-
-    runner = ScrapyJobRunner.from_scrapy_project()
     await runner.run(QuotesLongscrapeSpider, job, context)
 
 

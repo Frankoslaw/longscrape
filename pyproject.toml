@@ -7,11 +7,13 @@ authors = [
     { name = "Franciszek Łopuszański", email = "franopusz2006@gmail.com" }
 ]
 requires-python = ">=3.14"
+dependencies = []
 
 [dependency-groups]
 dev = [
-    "longscrape[all]",
     "longscrape-core",
+    "longscrape[all]",
+    "longscrape-scrapy",
     "ipykernel>=7.3.0",
     "numpy>=2.5.2",
     "pandas>=3.0.5",
@@ -22,17 +24,22 @@ dev = [
     "ruff>=0.16.3",
     "patchright>=1.61.2",
     "playwright>=1.62.0",
+    "scrapy>=2.17.0",
+    "pyrefly>=1.2.0",
+    "structlog>=26.1.0",
 ]
 
 [tool.uv.workspace]
 members = [
     "packages/longscrape_core",
-    "packages/longscrape"
+    "packages/longscrape",
+    "packages/longscrape_scrapy",
 ]
 
 [tool.uv.sources]
 longscrape-core = { workspace = true }
 longscrape = { workspace = true }
+longscrape-scrapy = { workspace = true }
 
 [tool.pyright]
 venvPath = "."

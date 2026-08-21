@@ -66,8 +66,8 @@ async with httpx.AsyncClient() as client:
 
 `Fetcher`, `Extractor`, and `Transformer` are protocols, so ordinary classes
 that expose the expected async-iterator method compose directly.
-Use `.transform(...)` for both record transforms and terminal sinks such as
-`RecordSink`; a sink simply yields no records.
+Use `.transform(...)` for record transforms and `.sink(...)` for terminal
+sinks such as `RecordSink`.
 
 ## Optional record typing
 
@@ -104,7 +104,7 @@ such as submitting a child job or sharing a live browser page:
 
 ```python
 context = PipelineContext(submitter)
-flow = Flow(context).fetch(fetcher).extract(extractor).transform(sink).build()
+flow = Flow(context).fetch(fetcher).extract(extractor).sink(sink).build()
 ```
 
 `JobRequest` is the input for root or child work; `Job.spawn_job(request)`
@@ -184,7 +184,7 @@ app = DramatiqApp.redis(url="redis://localhost:6379/0")
 @app.flow(kind="article", queue="scrape")
 @dramatiq_retries(policy=policy, max_retries=3)
 def article(context):
-    return Flow(context).fetch(fetcher).extract(extractor).transform(sink).build()
+    return Flow(context).fetch(fetcher).extract(extractor).sink(sink).build()
 
 await app.submit(JobRequest("article", InputUrl("https://example.com")))
 ```

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "longscrape-scrapy"
+version = "0.2.2"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Franciszek Łopuszański", email = "franopusz2006@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "longscrape-core",
+    "scrapy>=2.17.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/longscrape_scrapy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv.sources]
+longscrape-core = { workspace = true }
