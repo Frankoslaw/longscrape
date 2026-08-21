@@ -24,6 +24,8 @@ structlog.configure(
 
 # Enable the pipeline
 ITEM_PIPELINES = {
+    "with_scrapy.pipelines.AddJobIdPipeline": 100,
+    "with_scrapy.pipelines.StoreLongscrapeRecordPipeline": 200,
     "with_scrapy.pipelines.PrettyPrintQuotesPipeline": 300,
 }
 

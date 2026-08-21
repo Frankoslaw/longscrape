@@ -38,6 +38,7 @@ from longscrape_core.protocols import (
     JobQueue,
     JobStore,
     RecoveryPolicy,
+    Sink,
     Transformer,
 )
 
@@ -69,6 +70,7 @@ __all__ = [
     "RecoveryPolicy",
     "StageExecutionError",
     "StageObserver",
+    "Sink",
     "Transformer",
     "observe_extractor",
     "observe_fetcher",

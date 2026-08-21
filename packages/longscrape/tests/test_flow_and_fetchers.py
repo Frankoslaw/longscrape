@@ -91,7 +91,7 @@ def test_flow_builds_record_callables_with_or_without_a_sink() -> None:
         Flow()
         .fetch(OneDocumentFetcher())
         .extract(OneRecordExtractor())
-        .transform(RecordSink(store))
+        .sink(RecordSink(store))
         .build()
     )
 

@@ -1,7 +1,7 @@
 """Small, reusable job flows built from the core stage protocols."""
 
 from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterable
-from typing import Any, cast
+from typing import Any, Never, cast
 
 from longscrape_core import (
     Extractor,
@@ -9,6 +9,7 @@ from longscrape_core import (
     Job,
     PipelineContext,
     Record,
+    Sink,
     StageObserver,
     Transformer,
     observe_extractor,
@@ -17,6 +18,8 @@ from longscrape_core import (
 )
 
 type RecordFlow[T] = Callable[[Job], AsyncIterable[Record[T]]]
+
+__all__ = ["Flow", "RecordFlow"]
 
 __all__ = ["Flow", "RecordFlow"]
 
@@ -80,6 +83,16 @@ class _RecordFlow[T]:
             self._observers,
         )
 
+    def sink(self, sink: Sink[T]) -> _SinkFlow[T]:
+        return _SinkFlow(
+            self._fetcher,
+            self._extractor,
+            self._transformers,
+            sink,
+            self._context,
+            self._observers,
+        )
+
     def build(self) -> RecordFlow[T]:
         fetcher = self._fetcher
         extractor = self._extractor
@@ -98,5 +111,46 @@ class _RecordFlow[T]:
                 )
             async for record in records:
                 yield cast(Record[T], record)
+
+        return run
+
+
+class _SinkFlow[T]:
+    def __init__(
+        self,
+        fetcher: Fetcher,
+        extractor: Extractor[Any],
+        transformers: tuple[Transformer[Any, Any], ...],
+        sink: Sink[T],
+        context: PipelineContext | None,
+        observers: tuple[StageObserver, ...],
+    ) -> None:
+        self._fetcher = fetcher
+        self._extractor = extractor
+        self._transformers = transformers
+        self._sink = sink
+        self._context = context
+        self._observers = observers
+
+    def build(self) -> RecordFlow[Never]:
+        fetcher = self._fetcher
+        extractor = self._extractor
+        transformers = self._transformers
+        sink = self._sink
+        context = self._context
+        observers = self._observers
+
+        async def run(job: Job) -> AsyncIterator[Record[Never]]:
+            documents = observe_fetcher(fetcher, *observers).fetch(job, context)
+            records: AsyncIterable[Record[Any]] = observe_extractor(
+                extractor, *observers
+            ).extract(documents, job, context)
+            for transformer in transformers:
+                records = observe_transformer(transformer, *observers).transform(
+                    records, job, context
+                )
+            await sink.sink(cast(AsyncIterable[Record[T]], records), job, context)
+            if False:
+                yield
 
         return run

@@ -10,7 +10,7 @@ jobs continue to use the shared queue.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -37,6 +37,7 @@ from longscrape.runtime.errors import StageExecutionError
 from longscrape.runtime.flow import RecordFlow
 
 type FlowFactory = Callable[[PipelineContext], RecordFlow]
+type JobHandler = Callable[[Job, PipelineContext], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -174,6 +175,58 @@ class DramatiqApp:
                     throws=(_TerminalFlowError,),
                 )(run)
             return factory
+
+        return register
+
+    def job(
+        self,
+        *,
+        kind: str,
+        queue: str = "default",
+    ) -> Callable[[JobHandler], JobHandler]:
+        """Register an asyncio job handler without imposing a ``Flow``.
+
+        This is useful for integrations which use ``Job`` routing and
+        ``PipelineContext`` but own a different execution engine, such as a
+        Scrapy crawler.  Flow registration remains the preferred API for
+        ordinary longscrape pipelines.
+        """
+        if not kind:
+            raise ValueError("job kind must not be empty")
+        if kind in self._actors:
+            raise ValueError(f"a flow is already registered for {kind!r}")
+
+        def register(handler: JobHandler) -> JobHandler:
+            async def run(payload: Mapping[str, JsonValue]) -> None:
+                job = Job.from_dict(payload)
+                if job.worker_id not in {None, self._worker_id}:
+                    raise _TerminalFlowError(
+                        f"job is pinned to worker {job.worker_id!r}, not "
+                        f"{self._worker_id!r}"
+                    )
+                context = PipelineContext(
+                    DramatiqJobSubmitter(self), worker_id=self._worker_id
+                )
+                await handler(job, context)
+
+            actor = dramatiq.actor(
+                actor_name=f"longscrape.{kind}",
+                queue_name=queue,
+                broker=self._broker,
+                max_retries=0,
+                throws=(_TerminalFlowError,),
+            )(run)
+            self._actors[kind] = actor
+            self._queues[kind] = queue
+            if self._worker_id is not None:
+                dramatiq.actor(
+                    actor_name=f"longscrape.{kind}.worker.{self._worker_id}",
+                    queue_name=_affinity_queue(queue, self._worker_id),
+                    broker=self._broker,
+                    max_retries=0,
+                    throws=(_TerminalFlowError,),
+                )(run)
+            return handler
 
         return register
 

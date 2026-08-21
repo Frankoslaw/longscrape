@@ -79,7 +79,7 @@ async def main() -> None:
         .fetch(OneDocumentFetcher())
         .extract(ArticleExtractor())
         .transform(AddSlug())
-        .transform(sink)
+        .sink(sink)
         .build()
     )
 

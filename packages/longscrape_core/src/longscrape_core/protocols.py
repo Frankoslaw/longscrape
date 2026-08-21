@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterable
 from datetime import timedelta
-from typing import Any, Callable, Never, Protocol
+from typing import Any, Callable, Protocol
 from uuid import UUID
 
 from longscrape_core.context import JobSubmitter, PipelineContext
@@ -51,10 +51,6 @@ class Extractor[Out](Protocol):
     ) -> AsyncIterable[Record[Out]]: ...
 
 
-# NOTE: Earlier versions of api also exposed separate sink api with write method that
-# sat at the end of pipelines. But transformer that emits 0 items at the end effectively
-# provides same terminating behavior for both native longscrape usage and future
-# longscrape-scrapy integration.
 class Transformer[In, Out](Protocol):
     def transform(
         self,
@@ -62,6 +58,17 @@ class Transformer[In, Out](Protocol):
         job: Job,
         context: PipelineContext | None = None,
     ) -> AsyncIterable[Record[Out]]: ...
+
+
+class Sink[Out](Protocol):
+    """Terminal consumer of a stream of records."""
+
+    async def sink(
+        self,
+        records: AsyncIterable[Record[Out]],
+        job: Job,
+        context: PipelineContext | None = None,
+    ) -> None: ...
 
 
 class RecoveryPolicy(Protocol):
@@ -111,7 +118,7 @@ class RecordStore(Protocol):
 
 # TODO: In future consider buffered sink to support batched writes instead of spamming
 # the database with small records
-class RecordSink[In](Transformer[In, Never]):
+class RecordSink[In](Sink[In]):
     def __init__(
         self,
         store: RecordStore,
@@ -123,18 +130,15 @@ class RecordSink[In](Transformer[In, Never]):
         self._key = key
         self._policy = policy
 
-    async def transform(
+    async def sink(
         self,
         records: AsyncIterable[Record[In]],
         job: Job,
         context: PipelineContext | None = None,
-    ) -> AsyncIterable[Record[Never]]:
+    ) -> None:
         async for record in records:
             await self._store.put(
                 record,
                 key=self._key(record, job) if self._key is not None else None,
                 policy=self._policy,
             )
-
-        if False:
-            yield

@@ -43,14 +43,14 @@ async def main() -> None:
             Flow(context)
             .fetch(fetcher)
             .extract(QuotesExtractor())
-            .transform(quote_sink)
+            .sink(quote_sink)
             .build()
         ),
         AUTHOR: (
             Flow(context)
             .fetch(fetcher)
             .extract(AuthorExtractor())
-            .transform(author_sink)
+            .sink(author_sink)
             .build()
         ),
     }

@@ -97,19 +97,17 @@ class DemoSink:
         self._logger = get_logger(__name__)
         self._event_logger = event_logger
 
-    async def transform(
+    async def sink(
         self,
         records: AsyncIterable[Record],
         job: Job,
         context: PipelineContext | None = None,
-    ) -> AsyncIterator[Record]:
+    ) -> None:
         async for record in records:
             self._logger.info("saving demo record: url=%s", record.data["url"])
             if self._event_logger is not None:
                 self._event_logger.info("saving_demo_record", url=record.data["url"])
             print(f"saved record: {record.data}")
-        if False:
-            yield
 
 
 def parse_args() -> argparse.Namespace:
@@ -199,8 +197,7 @@ async def main() -> None:
         documents = observe_fetcher(fetcher, *observers).fetch(job)
         records = observe_extractor(extractor, *observers).extract(documents, job)
         enriched = observe_transformer(transformer, *observers).transform(records, job)
-        async for _ in observe_transformer(sink, *observers).transform(enriched, job):
-            pass
+        await sink.sink(enriched, job)
         return
 
     flow = (
@@ -208,7 +205,7 @@ async def main() -> None:
         .fetch(fetcher)
         .extract(extractor)
         .transform(transformer)
-        .transform(sink)
+        .sink(sink)
         .build()
     )
     async for _ in flow(job):

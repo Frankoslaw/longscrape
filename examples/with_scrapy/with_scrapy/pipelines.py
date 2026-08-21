@@ -1,6 +1,43 @@
+from collections.abc import AsyncIterable
+
 import structlog
+from longscrape import Job, PipelineContext, Record
+from longscrape.stores import InMemoryRecordStore
+from longscrape_scrapy import (
+    LongscrapeSinkPipeline,
+    LongscrapeTransformerPipeline,
+)
 
 logger = structlog.get_logger()
+
+
+class AddJobIdPipeline(LongscrapeTransformerPipeline):
+    async def transform(
+        self,
+        records: AsyncIterable[Record],
+        job: Job,
+        context: PipelineContext | None = None,
+    ) -> AsyncIterable[Record]:
+        async for record in records:
+            yield Record(
+                record.kind,
+                {**record.data, "job_id": str(job.id)},
+                created_at=record.created_at,
+            )
+
+
+record_store = InMemoryRecordStore()
+
+
+class StoreLongscrapeRecordPipeline(LongscrapeSinkPipeline):
+    async def sink(
+        self,
+        records: AsyncIterable[Record],
+        job: Job,
+        context: PipelineContext | None = None,
+    ) -> None:
+        async for record in records:
+            await record_store.put(record)
 
 
 class PrettyPrintQuotesPipeline:
