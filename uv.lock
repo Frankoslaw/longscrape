@@ -996,13 +996,13 @@ name = "longscrape-scrapy"
 version = "0.2.2"
 source = { editable = "packages/longscrape_scrapy" }
 dependencies = [
-    { name = "longscrape-core" },
+    { name = "longscrape" },
     { name = "scrapy" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "longscrape-core", editable = "packages/longscrape_core" },
+    { name = "longscrape", editable = "packages/longscrape" },
     { name = "scrapy", specifier = ">=2.17.0" },
 ]
 

@@ -4,7 +4,7 @@ import pytest
 from longscrape_core.context import PipelineContext
 from longscrape_core.models import Document, InputUrl, Job
 from longscrape_core.observability import observe_fetcher
-from longscrape_core.recovery import PipelineFailure
+from longscrape_core.recovery import PipelineFailure, StageExecutionError
 
 
 class FailingFetcher:
@@ -24,7 +24,7 @@ def test_observation_reports_failure_without_wrapping_the_original_error() -> No
     async def run() -> RecordingObserver:
         observer = RecordingObserver()
         fetcher = observe_fetcher(FailingFetcher(), observer)
-        with pytest.raises(ValueError, match="unavailable"):
+        with pytest.raises(StageExecutionError, match="fetch failed"):
             await fetcher.fetch(
                 Job("article", InputUrl("https://example.com")),
                 PipelineContext(),

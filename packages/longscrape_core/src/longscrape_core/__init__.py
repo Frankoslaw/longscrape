@@ -1,17 +1,8 @@
-"""Core values, stage contracts, and optional integrations for longscrape."""
+"""Dependency-light values and stage contracts for longscrape."""
 
-from longscrape_core._json import (
-    FrozenJsonObject,
-    JsonInput,
-    JsonObject,
-    JsonScalar,
-    JsonValue,
-    freeze_json,
-    freeze_json_object,
-    thaw_json,
-    thaw_json_object,
-)
+from longscrape_core._json import JsonInput, JsonObject, JsonScalar, JsonValue
 from longscrape_core.context import ContextKey, PipelineContext
+from longscrape_core.failures import Stage, StageError, StageFailure
 from longscrape_core.models import (
     Document,
     DocumentRef,
@@ -22,103 +13,31 @@ from longscrape_core.models import (
     JobInput,
     Record,
 )
-from longscrape_core.observability import (
-    StageObserver,
-    observe_extractor,
-    observe_fetcher,
-    observe_sink,
-    observe_stage,
-    observe_transformer,
-)
 from longscrape_core.pipeline import Extractor, Fetcher, Sink, Transformer
-from longscrape_core.recovery import (
-    HttpStatusError,
-    PipelineFailure,
-    PipelineStage,
-    Recovery,
-    RecoveryAction,
-    RecoveryPolicy,
-)
 from longscrape_core.serialization import job_from_json, job_to_json
-from longscrape_core.storage import (
-    DocumentArchive,
-    DocumentCache,
-    RecordMerger,
-    RecordRef,
-    RecordSink,
-    RecordStore,
-    require_record_key,
-)
-from longscrape_core.work import (
-    WORK_EXECUTION,
-    JobExecutor,
-    LeaseLostError,
-    WorkController,
-    WorkEvent,
-    WorkEventType,
-    WorkExecution,
-    WorkLease,
-    WorkRequest,
-    WorkState,
-    WorkStore,
-    WorkView,
-)
 
 __all__ = [
     "ContextKey",
     "Document",
-    "DocumentArchive",
-    "DocumentCache",
     "DocumentRef",
     "Extractor",
     "Fetcher",
-    "FrozenJsonObject",
-    "HttpStatusError",
     "InputDocument",
     "InputQuery",
     "InputUrl",
     "Job",
-    "JobExecutor",
     "JobInput",
     "JsonInput",
     "JsonObject",
     "JsonScalar",
     "JsonValue",
-    "LeaseLostError",
     "PipelineContext",
-    "PipelineFailure",
-    "PipelineStage",
     "Record",
-    "RecordMerger",
-    "RecordRef",
-    "RecordSink",
-    "RecordStore",
-    "Recovery",
-    "RecoveryAction",
-    "RecoveryPolicy",
     "Sink",
-    "StageObserver",
+    "Stage",
+    "StageError",
+    "StageFailure",
     "Transformer",
-    "WORK_EXECUTION",
-    "WorkEvent",
-    "WorkEventType",
-    "WorkExecution",
-    "WorkController",
-    "WorkLease",
-    "WorkRequest",
-    "WorkState",
-    "WorkStore",
-    "WorkView",
-    "freeze_json",
-    "freeze_json_object",
-    "observe_extractor",
-    "observe_fetcher",
-    "observe_sink",
-    "observe_stage",
-    "observe_transformer",
     "job_from_json",
     "job_to_json",
-    "require_record_key",
-    "thaw_json",
-    "thaw_json_object",
 ]

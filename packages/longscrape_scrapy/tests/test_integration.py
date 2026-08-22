@@ -2,7 +2,7 @@ import asyncio
 from collections.abc import AsyncIterable, AsyncIterator
 
 import pytest
-from longscrape_core import Document, InputUrl, Job, PipelineContext, Record
+from longscrape import Document, InputUrl, Job, PipelineContext, Record
 from longscrape_scrapy import (
     LongscrapeSinkPipeline,
     LongscrapeSpider,

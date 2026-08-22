@@ -1,5 +1,5 @@
 """Optional durable orchestration integrations."""
 
-from longscrape.orchestration.dramatiq import DramatiqApp, dramatiq_retries
+from longscrape.orchestration.dramatiq import DramatiqTransport
 
-__all__ = ["DramatiqApp", "dramatiq_retries"]
+__all__ = ["DramatiqTransport"]

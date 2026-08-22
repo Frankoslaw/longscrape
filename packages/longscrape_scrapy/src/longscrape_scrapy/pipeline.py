@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterable, AsyncIterator
 from typing import Any
 
-from longscrape_core import Job, PipelineContext, Record, Sink
+from longscrape import Job, PipelineContext, Record, Sink
 from scrapy.exceptions import DropItem
 
 from longscrape_scrapy.items import item_from_record, record_from_item

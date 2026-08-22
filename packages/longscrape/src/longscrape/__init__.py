@@ -1,40 +1,8 @@
+"""Runtime integrations built on longscrape-core."""
+
 import logging as stdlib_logging
 
-from longscrape_core import (
-    CollisionPolicy,
-    ContextKey,
-    Document,
-    DocumentInput,
-    DocumentRef,
-    Extractor,
-    Fetcher,
-    HttpStatusError,
-    InputQuery,
-    InputUrl,
-    Job,
-    JobQueue,
-    JobRequest,
-    JobStatus,
-    JobStore,
-    PipelineContext,
-    PipelineFailure,
-    PipelineStage,
-    Record,
-    RecordRef,
-    Recovery,
-    RecoveryAction,
-    RecoveryPolicy,
-    Sink,
-    StageExecutionError,
-    StageObserver,
-    StoredJob,
-    Transformer,
-    observe_extractor,
-    observe_fetcher,
-    observe_stage,
-    observe_transformer,
-)
-from longscrape_core.protocols import DocumentStore, RecordSink, RecordStore
+from longscrape_core import *
 
 from longscrape.logging import configure_logging
 from longscrape.observability import (
@@ -42,47 +10,21 @@ from longscrape.observability import (
     OpenTelemetryObserver,
     StructlogObserver,
 )
+from longscrape.runtime import Flow, FlowExecutor, Worker
+from longscrape.runtime.work import JobExecutor, WorkLease, WorkRequest, WorkStore
 
 stdlib_logging.getLogger("longscrape").addHandler(stdlib_logging.NullHandler())
 
 __all__ = [
-    "ContextKey",
-    "Document",
-    "DocumentInput",
-    "DocumentRef",
-    "DocumentStore",
-    "Extractor",
-    "Fetcher",
-    "HttpStatusError",
-    "InputQuery",
-    "InputUrl",
-    "Job",
-    "JobQueue",
-    "JobRequest",
-    "JobStatus",
-    "JobStore",
-    "PipelineContext",
-    "PipelineFailure",
-    "StageObserver",
-    "Sink",
-    "StageExecutionError",
-    "PipelineStage",
-    "Record",
-    "RecordRef",
-    "Recovery",
-    "RecoveryAction",
-    "RecoveryPolicy",
-    "RecordSink",
-    "RecordStore",
-    "Transformer",
-    "observe_extractor",
-    "observe_fetcher",
-    "observe_stage",
-    "observe_transformer",
-    "StoredJob",
-    "CollisionPolicy",
-    "configure_logging",
+    "Flow",
+    "FlowExecutor",
+    "JobExecutor",
     "LoggingObserver",
     "OpenTelemetryObserver",
     "StructlogObserver",
+    "WorkLease",
+    "WorkRequest",
+    "WorkStore",
+    "Worker",
+    "configure_logging",
 ]

@@ -5,7 +5,7 @@ from functools import wraps
 from typing import Any
 
 import scrapy
-from longscrape_core import Extractor, Fetcher, Job, PipelineContext
+from longscrape import Extractor, Fetcher, Job, PipelineContext
 from scrapy.http import Response
 
 from longscrape_scrapy.http import LongscrapeRequest, response_to_document
@@ -71,8 +71,5 @@ class LongscrapeSpider(scrapy.Spider):
             return
         document = response_to_document(response)
 
-        async def documents() -> AsyncIterator[Any]:
-            yield document
-
-        async for record in self.extractor.extract(documents(), self.job, self.context):
+        async for record in self.extractor.extract(document, self.job, self.context):
             yield item_from_record(record)

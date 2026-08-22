@@ -4,7 +4,7 @@ import warnings
 from collections.abc import Mapping
 from typing import Any
 
-from longscrape_core import Job, PipelineContext
+from longscrape import Job, JobExecutor, PipelineContext
 from scrapy.crawler import AsyncCrawlerProcess
 from scrapy.settings import Settings
 from scrapy.utils.project import get_project_settings
@@ -12,10 +12,15 @@ from scrapy.utils.project import get_project_settings
 from longscrape_scrapy.spider import LongscrapeSpider
 
 
-class ScrapyJobRunner:
+class ScrapyJobRunner(JobExecutor):
     """Run one durable longscrape job through one project-aware crawler."""
 
-    def __init__(self, settings: Settings | Mapping[str, Any]) -> None:
+    def __init__(
+        self,
+        spider: type[LongscrapeSpider],
+        settings: Settings | Mapping[str, Any],
+    ) -> None:
+        self._spider = spider
         self._settings = Settings(settings)
         if self._settings.getbool("TWISTED_REACTOR_ENABLED"):
             warnings.warn(
@@ -36,19 +41,14 @@ class ScrapyJobRunner:
         )
 
     @classmethod
-    def from_scrapy_project(cls) -> "ScrapyJobRunner":
+    def from_scrapy_project(cls, spider: type[LongscrapeSpider]) -> "ScrapyJobRunner":
         """Load the active Scrapy project's settings and extend them safely."""
-        return cls(get_project_settings())
+        return cls(spider, get_project_settings())
 
-    async def run(
-        self,
-        spider: type[LongscrapeSpider],
-        job: Job,
-        context: PipelineContext,
-    ) -> None:
+    async def execute(self, job: Job, context: PipelineContext) -> None:
         process = AsyncCrawlerProcess(self._settings, install_root_handler=False)
         await process.crawl(
-            spider,
+            self._spider,
             longscrape_job=job,
             longscrape_context=context,
         )

@@ -7,9 +7,12 @@ from longscrape_core import (
     Extractor,
     Fetcher,
     Job,
+    JobExecutionError,
+    JobExecutor,
     PipelineContext,
     Record,
     Sink,
+    StageExecutionError,
     StageObserver,
     Transformer,
     observe_extractor,
@@ -19,9 +22,53 @@ from longscrape_core import (
 
 type RecordFlow[T] = Callable[[Job], AsyncIterable[Record[T]]]
 
-__all__ = ["Flow", "RecordFlow"]
+__all__ = ["Flow", "FlowExecutor", "RecordFlow"]
 
-__all__ = ["Flow", "RecordFlow"]
+
+class FlowExecutor(JobExecutor):
+    """Execute a linear core flow behind the common worker boundary."""
+
+    def __init__(
+        self,
+        fetcher: Fetcher,
+        extractor: Extractor[Any],
+        *,
+        transformers: Iterable[Transformer[Any, Any]] = (),
+        sink: Sink[Any] | None = None,
+    ) -> None:
+        self._fetcher = fetcher
+        self._extractor = extractor
+        self._transformers = tuple(transformers)
+        self._sink = sink
+
+    async def execute(self, job: Job, context: PipelineContext) -> None:
+        from longscrape_core import PipelineFailure, PipelineStage
+
+        try:
+            document = await self._fetcher.fetch(job, context)
+        except StageExecutionError as error:
+            raise JobExecutionError(error.failure) from error
+        except Exception as error:
+            raise JobExecutionError(
+                PipelineFailure(PipelineStage.FETCH, job, error, context)
+            ) from error
+        try:
+            records: AsyncIterable[Record[Any]] = self._extractor.extract(
+                document, job, context
+            )
+            for transformer in self._transformers:
+                records = transformer.transform(records, job, context)
+            if self._sink is not None:
+                await self._sink.sink(records, job, context)
+            else:
+                async for _ in records:
+                    pass
+        except StageExecutionError as error:
+            raise JobExecutionError(error.failure) from error
+        except Exception as error:
+            raise JobExecutionError(
+                PipelineFailure(PipelineStage.EXTRACT, job, error, context)
+            ) from error
 
 
 class Flow:

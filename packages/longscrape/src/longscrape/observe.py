@@ -7,7 +7,8 @@ from typing import Protocol, TypeVar
 from longscrape_core.context import PipelineContext
 from longscrape_core.models import Document, Job, Record
 from longscrape_core.pipeline import Extractor, Fetcher, Sink, Transformer
-from longscrape_core.recovery import PipelineFailure, PipelineStage
+
+from longscrape.runtime.work import JobExecutor
 
 
 class StageObserver(Protocol):
@@ -51,7 +52,9 @@ async def observe_stage(
             "on_stage_failed",
             PipelineFailure(stage, job, error, context),
         )
-        raise
+        raise StageExecutionError(
+            PipelineFailure(stage, job, error, context)
+        ) from error
     else:
         await _notify(observer_list, "on_stage_succeeded", stage, job, context)
 
@@ -71,7 +74,9 @@ def observe_fetcher(fetcher: Fetcher, *observers: StageObserver) -> Fetcher:
                     "on_stage_failed",
                     PipelineFailure(PipelineStage.FETCH, job, error, context),
                 )
-                raise
+                raise StageExecutionError(
+                    PipelineFailure(PipelineStage.FETCH, job, error, context)
+                ) from error
             await _notify(
                 observer_list, "on_stage_succeeded", PipelineStage.FETCH, job, context
             )
@@ -139,3 +144,24 @@ def observe_sink[In](sink: Sink[In], *observers: StageObserver) -> Sink[In]:
             )
 
     return ObservedSink()
+
+
+def observe_executor(executor: JobExecutor, *observers: StageObserver) -> JobExecutor:
+    """Attach a job lifecycle boundary to any executor."""
+
+    class ObservedExecutor:
+        async def execute(self, job: Job, context: PipelineContext) -> None:
+            observer_list = tuple(observers)
+            await _notify(observer_list, "on_job_started", job, context)
+            try:
+                await executor.execute(job, context)
+            except JobExecutionError as error:
+                await _notify(observer_list, "on_job_failed", error.failure)
+                raise
+            except Exception as error:
+                failure = PipelineFailure(PipelineStage.EXTRACT, job, error, context)
+                await _notify(observer_list, "on_job_failed", failure)
+                raise JobExecutionError(failure) from error
+            await _notify(observer_list, "on_job_succeeded", job, context)
+
+    return ObservedExecutor()

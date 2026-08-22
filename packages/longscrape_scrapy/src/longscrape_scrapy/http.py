@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import scrapy
-from longscrape_core import Document, Fetcher, Job, PipelineContext
+from longscrape import Document, Fetcher, Job, PipelineContext
 from scrapy.http import HtmlResponse, Response
 
 FETCH_URL = "longscrape://fetch"
@@ -26,18 +26,7 @@ async def one_document(
     fetcher: Fetcher, job: Job, context: PipelineContext
 ) -> Document:
     """Resolve the deliberately narrow Fetcher-to-Scrapy boundary."""
-    documents = aiter(fetcher.fetch(job, context))
-    try:
-        document = await anext(documents)
-    except StopAsyncIteration as error:
-        raise FetcherCardinalityError(
-            "Scrapy fetchers must yield exactly one document"
-        ) from error
-    try:
-        await anext(documents)
-    except StopAsyncIteration:
-        return document
-    raise FetcherCardinalityError("Scrapy fetchers must yield exactly one document")
+    return await fetcher.fetch(job, context)
 
 
 def document_to_response(document: Document, request: scrapy.Request) -> Response:

@@ -5,7 +5,7 @@ from longscrape_scrapy.http import (
     document_to_response,
     response_to_document,
 )
-from longscrape_scrapy.items import TOKEN_FIELD, item_from_record, record_from_item
+from longscrape_scrapy.items import LongscrapeItem, item_from_record, record_from_item
 from longscrape_scrapy.pipeline import (
     LongscrapeSinkPipeline,
     LongscrapeTransformerPipeline,
@@ -19,11 +19,11 @@ __all__ = [
     "LongscrapeFetcherMiddleware",
     "LongscrapeRequest",
     "LongscrapeSinkPipeline",
+    "LongscrapeItem",
     "LongscrapeSpider",
     "LongscrapeTransformerPipeline",
     "PipelineCardinalityError",
     "ScrapyJobRunner",
-    "TOKEN_FIELD",
     "document_to_response",
     "item_from_record",
     "job_only",
