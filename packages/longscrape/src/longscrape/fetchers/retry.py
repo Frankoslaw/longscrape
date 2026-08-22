@@ -1,7 +1,6 @@
 """A local retry executor driven by a recovery policy."""
 
 import asyncio
-from collections.abc import AsyncIterator
 
 from longscrape_core import (
     Document,
@@ -34,18 +33,13 @@ class RetryingFetcher:
 
     async def fetch(
         self, job: Job, context: PipelineContext | None = None
-    ) -> AsyncIterator[Document]:
+    ) -> Document:
         for attempt in range(self._max_retries + 1):
             try:
                 # Do not expose a partial attempt: a subsequent retry restarts
                 # the wrapped fetcher and would otherwise duplicate documents
                 # already consumed by downstream stages.
-                documents: list[Document] = []
-                async for document in self._fetcher.fetch(job, context):
-                    documents.append(document)
-                for document in documents:
-                    yield document
-                return
+                return await self._fetcher.fetch(job, context)
             except Exception as error:
                 failure = PipelineFailure(PipelineStage.FETCH, job, error, context)
                 recovery = (

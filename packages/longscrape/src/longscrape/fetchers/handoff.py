@@ -1,7 +1,7 @@
 """A local recovery executor for fetch failures that require human handoff."""
 
 import asyncio
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Callable
 from typing import Protocol
 
 from longscrape_core import (
@@ -56,23 +56,19 @@ class HandoffFetcher:
 
     async def fetch(
         self, job: Job, context: PipelineContext | None = None
-    ) -> AsyncIterator[Document]:
+    ) -> Document:
         for attempt in range(self._max_recoveries + 1):
             detected = False
             try:
                 # As with ordinary retries, defer output until the attempt has
                 # completed so a recovery cannot replay partial output.
-                documents: list[Document] = []
-                async for document in self._fetcher.fetch(job, context):
-                    if self._detector is not None:
-                        error = self._detector(document, job)
-                        if error is not None:
-                            detected = True
-                            raise error
-                    documents.append(document)
-                for document in documents:
-                    yield document
-                return
+                document = await self._fetcher.fetch(job, context)
+                if self._detector is not None:
+                    error = self._detector(document, job)
+                    if error is not None:
+                        detected = True
+                        raise error
+                return document
             except Exception as error:
                 failure = PipelineFailure(PipelineStage.FETCH, job, error, context)
                 recovery = (

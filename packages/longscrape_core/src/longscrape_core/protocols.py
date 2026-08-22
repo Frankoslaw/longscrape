@@ -37,15 +37,15 @@ class JobQueue(JobSubmitter, Protocol):
 
 
 class Fetcher(Protocol):
-    def fetch(
+    async def fetch(
         self, job: Job, context: PipelineContext | None = None
-    ) -> AsyncIterable[Document]: ...
+    ) -> Document: ...
 
 
 class Extractor[Out](Protocol):
     def extract(
         self,
-        documents: AsyncIterable[Document],
+        document: Document,
         job: Job,
         context: PipelineContext | None = None,
     ) -> AsyncIterable[Record[Out]]: ...

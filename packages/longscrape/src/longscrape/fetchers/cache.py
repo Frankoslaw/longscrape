@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from longscrape_core import CollisionPolicy, Document, Fetcher, Job, PipelineContext
@@ -31,24 +31,19 @@ class CachedFetcher:
 
     async def fetch(
         self, job: Job, context: PipelineContext | None = None
-    ) -> AsyncIterator[Document]:
+    ) -> Document:
         ref = await self._store.latest(self._cache_key(job)) if self._read else None
         cached = await self._store.get(ref) if ref is not None else None
         if cached is not None and self._is_fresh(cached):
-            yield cached
-            return
+            return cached
 
         if self._fetcher is None:
-            return
+            raise RuntimeError("CachedFetcher has no fallback fetcher")
 
-        async for document in self._fetcher.fetch(job, context):
-            if self._write:
-                await self._store.put(
-                    document,
-                    key=self._cache_key(job),
-                    policy=CollisionPolicy.OVERWRITE,
-                )
-            yield document
+        document = await self._fetcher.fetch(job, context)
+        if self._write:
+            await self._store.put(document, key=self._cache_key(job), policy=CollisionPolicy.OVERWRITE)
+        return document
 
     def _is_fresh(self, document: Document) -> bool:
         if self._max_age is None:

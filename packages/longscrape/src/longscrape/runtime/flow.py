@@ -88,10 +88,10 @@ class _RecordFlow[T]:
         observers = self._observers
 
         async def run(job: Job) -> AsyncIterator[Record[T]]:
-            documents = observe_fetcher(fetcher, *observers).fetch(job, context)
+            document = await observe_fetcher(fetcher, *observers).fetch(job, context)
             records: AsyncIterable[Record[Any]] = observe_extractor(
                 extractor, *observers
-            ).extract(documents, job, context)
+            ).extract(document, job, context)
             for transformer in transformers:
                 records = observe_transformer(transformer, *observers).transform(
                     records, job, context

@@ -72,16 +72,18 @@ def observe_fetcher(fetcher: Fetcher, *observers: StageObserver) -> Fetcher:
     """Return a fetcher decorator that emits stage callbacks."""
 
     class ObservedFetcher:
-        def fetch(
+        async def fetch(
             self, job: Job, context: PipelineContext | None = None
-        ) -> AsyncIterable[Document]:
-            return observe_stage(
-                fetcher.fetch(job, context),
-                PipelineStage.FETCH,
-                job,
-                context,
-                observers=observers,
-            )
+        ) -> Document:
+            await _notify(observers, "on_stage_started", PipelineStage.FETCH, job, context)
+            try:
+                document = await fetcher.fetch(job, context)
+            except Exception as error:
+                failure = PipelineFailure(PipelineStage.FETCH, job, error, context)
+                await _notify(observers, "on_stage_failed", failure)
+                raise StageExecutionError(failure) from error
+            await _notify(observers, "on_stage_succeeded", PipelineStage.FETCH, job, context)
+            return document
 
     return ObservedFetcher()
 
@@ -94,12 +96,12 @@ def observe_extractor[Out](
     class ObservedExtractor:
         def extract(
             self,
-            documents: AsyncIterable[Document],
+            document: Document,
             job: Job,
             context: PipelineContext | None = None,
         ) -> AsyncIterable[Record[Out]]:
             return observe_stage(
-                extractor.extract(documents, job, context),
+                extractor.extract(document, job, context),
                 PipelineStage.EXTRACT,
                 job,
                 context,

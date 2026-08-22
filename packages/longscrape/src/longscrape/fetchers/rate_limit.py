@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Callable
 
 from longscrape_core import (
     Document,
@@ -34,7 +34,6 @@ class RateLimitedFetcher:
 
     async def fetch(
         self, job: Job, context: PipelineContext | None = None
-    ) -> AsyncIterator[Document]:
+    ) -> Document:
         await self._rate_limiter.acquire(self._rate_limit_key(job))
-        async for document in self._fetcher.fetch(job, context):
-            yield document
+        return await self._fetcher.fetch(job, context)

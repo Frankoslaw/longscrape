@@ -1,4 +1,3 @@
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 
@@ -19,7 +18,7 @@ class HttpxFetcher(Fetcher):
 
     async def fetch(
         self, job: Job, context: PipelineContext | None = None
-    ) -> AsyncIterator[Document]:
+    ) -> Document:
         if not isinstance(job.input, InputUrl):
             raise TypeError("HttpxFetcher requires an InputUrl input")
 
@@ -34,7 +33,7 @@ class HttpxFetcher(Fetcher):
             )
 
         # noinspection PyTypeChecker
-        yield Document(
+        return Document(
             url=str(response.url),
             content=response.content,
             content_type=response.headers.get("content-type", "text/html"),

@@ -1,5 +1,5 @@
 from collections.abc import Awaitable, Callable
-from typing import Any, AsyncIterable, Literal
+from typing import Any, Literal
 
 from longscrape_core import (
     Document,
@@ -42,7 +42,7 @@ class BrowserFetcher(Fetcher):
 
     async def fetch(
         self, job: Job, context: PipelineContext | None = None
-    ) -> AsyncIterable[Document]:
+    ) -> Document:
         if not isinstance(job.input, InputUrl):
             raise TypeError("BrowserFetcher requires a URL input")
 
@@ -71,7 +71,7 @@ class BrowserFetcher(Fetcher):
                 await self._page_ready(page)
             content = await page.content()
 
-            yield Document(
+            return Document(
                 url=page.url,
                 content=content.encode("utf-8"),
                 status=response.status if response else 200,
