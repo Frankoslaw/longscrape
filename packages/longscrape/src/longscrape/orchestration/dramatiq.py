@@ -137,7 +137,9 @@ class DramatiqApp:
                         f"{self._worker_id!r}"
                     )
                 context = PipelineContext(
-                    DramatiqJobSubmitter(self), worker_id=self._worker_id
+                    job,
+                    DramatiqJobSubmitter(self),
+                    worker_id=self._worker_id,
                 )
                 flow = factory(context)
                 try:

@@ -14,7 +14,7 @@ from longscrape_core.failures import (
     PipelineStage,
     StageExecutionError,
 )
-from longscrape_core.models import Document, Job, Record
+from longscrape_core.models import Document, FetchInput, Job, Record
 from longscrape_core.protocols import Extractor, Fetcher, Transformer
 
 
@@ -73,11 +73,12 @@ def observe_fetcher(fetcher: Fetcher, *observers: StageObserver) -> Fetcher:
 
     class ObservedFetcher:
         async def fetch(
-            self, job: Job, context: PipelineContext | None = None
+            self, fetch_input: FetchInput, context: PipelineContext
         ) -> Document:
+            job = context.job
             await _notify(observers, "on_stage_started", PipelineStage.FETCH, job, context)
             try:
-                document = await fetcher.fetch(job, context)
+                document = await fetcher.fetch(fetch_input, context)
             except Exception as error:
                 failure = PipelineFailure(PipelineStage.FETCH, job, error, context)
                 await _notify(observers, "on_stage_failed", failure)
@@ -97,13 +98,12 @@ def observe_extractor[Out](
         def extract(
             self,
             document: Document,
-            job: Job,
-            context: PipelineContext | None = None,
+            context: PipelineContext,
         ) -> AsyncIterable[Record[Out]]:
             return observe_stage(
-                extractor.extract(document, job, context),
+                extractor.extract(document, context),
                 PipelineStage.EXTRACT,
-                job,
+                context.job,
                 context,
                 observers=observers,
             )
@@ -120,13 +120,12 @@ def observe_transformer[In, Out](
         def transform(
             self,
             records: AsyncIterable[Record[In]],
-            job: Job,
-            context: PipelineContext | None = None,
+            context: PipelineContext,
         ) -> AsyncIterable[Record[Out]]:
             return observe_stage(
-                transformer.transform(records, job, context),
+                transformer.transform(records, context),
                 PipelineStage.TRANSFORM,
-                job,
+                context.job,
                 context,
                 observers=observers,
             )

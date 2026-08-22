@@ -7,7 +7,7 @@ from longscrape_core import (
     Fetcher,
     HttpStatusError,
     InputUrl,
-    Job,
+    FetchInput,
     PipelineContext,
 )
 
@@ -17,12 +17,12 @@ class HttpxFetcher(Fetcher):
         self._http = http
 
     async def fetch(
-        self, job: Job, context: PipelineContext | None = None
+        self, fetch_input: FetchInput, context: PipelineContext
     ) -> Document:
-        if not isinstance(job.input, InputUrl):
+        if not isinstance(fetch_input, InputUrl):
             raise TypeError("HttpxFetcher requires an InputUrl input")
 
-        response = await self._http.get(job.input.url)
+        response = await self._http.get(fetch_input.url)
         if response.status_code >= 400:
             raise HttpStatusError(
                 url=str(response.url),

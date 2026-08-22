@@ -30,8 +30,9 @@ class CachedFetcher:
         self._max_age = max_age
 
     async def fetch(
-        self, job: Job, context: PipelineContext | None = None
+        self, fetch_input, context: PipelineContext
     ) -> Document:
+        job = context.job
         ref = await self._store.latest(self._cache_key(job)) if self._read else None
         cached = await self._store.get(ref) if ref is not None else None
         if cached is not None and self._is_fresh(cached):
@@ -40,7 +41,7 @@ class CachedFetcher:
         if self._fetcher is None:
             raise RuntimeError("CachedFetcher has no fallback fetcher")
 
-        document = await self._fetcher.fetch(job, context)
+        document = await self._fetcher.fetch(fetch_input, context)
         if self._write:
             await self._store.put(document, key=self._cache_key(job), policy=CollisionPolicy.OVERWRITE)
         return document

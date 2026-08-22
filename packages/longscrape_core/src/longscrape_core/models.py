@@ -70,7 +70,9 @@ class DocumentInput:
     ref: DocumentRef
 
 
-type JobInput = InputUrl | InputQuery | DocumentInput
+type FetchInput = InputUrl | InputQuery | DocumentInput
+# Kept as an alias for durable job models; fetchers should use ``FetchInput``.
+type JobInput = FetchInput
 
 
 @dataclass(frozen=True)

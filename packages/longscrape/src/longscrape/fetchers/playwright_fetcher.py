@@ -41,9 +41,9 @@ class BrowserFetcher(Fetcher):
         self._page_metadata_key = page_metadata_key
 
     async def fetch(
-        self, job: Job, context: PipelineContext | None = None
+        self, fetch_input, context: PipelineContext
     ) -> Document:
-        if not isinstance(job.input, InputUrl):
+        if not isinstance(fetch_input, InputUrl):
             raise TypeError("BrowserFetcher requires a URL input")
 
         if self._page_mode == "reuse":
@@ -64,7 +64,7 @@ class BrowserFetcher(Fetcher):
             page = await self._browser.create_page()
             close_page = True
         try:
-            response = await page.goto(job.input.url, **self._goto_options)
+            response = await page.goto(fetch_input.url, **self._goto_options)
             if response is not None and response.status >= 400:
                 raise HttpStatusError(page.url, response.status)
             if self._page_ready:

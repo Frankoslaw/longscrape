@@ -9,6 +9,7 @@ from longscrape_core.models import (
     CollisionPolicy,
     Document,
     DocumentRef,
+    FetchInput,
     Job,
     Record,
     RecordRef,
@@ -38,16 +39,14 @@ class JobQueue(JobSubmitter, Protocol):
 
 class Fetcher(Protocol):
     async def fetch(
-        self, job: Job, context: PipelineContext | None = None
+        self, fetch_input: FetchInput, context: PipelineContext
     ) -> Document: ...
 
 
 class Extractor[Out](Protocol):
     def extract(
         self,
-        document: Document,
-        job: Job,
-        context: PipelineContext | None = None,
+        document: Document, context: PipelineContext,
     ) -> AsyncIterable[Record[Out]]: ...
 
 
@@ -58,9 +57,7 @@ class Extractor[Out](Protocol):
 class Transformer[In, Out](Protocol):
     def transform(
         self,
-        records: AsyncIterable[Record[In]],
-        job: Job,
-        context: PipelineContext | None = None,
+        records: AsyncIterable[Record[In]], context: PipelineContext,
     ) -> AsyncIterable[Record[Out]]: ...
 
 
@@ -125,14 +122,12 @@ class RecordSink[In](Transformer[In, Never]):
 
     async def transform(
         self,
-        records: AsyncIterable[Record[In]],
-        job: Job,
-        context: PipelineContext | None = None,
+        records: AsyncIterable[Record[In]], context: PipelineContext,
     ) -> AsyncIterable[Record[Never]]:
         async for record in records:
             await self._store.put(
                 record,
-                key=self._key(record, job) if self._key is not None else None,
+                key=self._key(record, context.job) if self._key is not None else None,
                 policy=self._policy,
             )
 

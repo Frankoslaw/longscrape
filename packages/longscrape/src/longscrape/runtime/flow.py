@@ -88,13 +88,17 @@ class _RecordFlow[T]:
         observers = self._observers
 
         async def run(job: Job) -> AsyncIterator[Record[T]]:
-            document = await observe_fetcher(fetcher, *observers).fetch(job, context)
+            pipeline_context = context or PipelineContext(job)
+            pipeline_context.job = job
+            document = await observe_fetcher(fetcher, *observers).fetch(
+                job.input, pipeline_context
+            )
             records: AsyncIterable[Record[Any]] = observe_extractor(
                 extractor, *observers
-            ).extract(document, job, context)
+            ).extract(document, pipeline_context)
             for transformer in transformers:
                 records = observe_transformer(transformer, *observers).transform(
-                    records, job, context
+                    records, pipeline_context
                 )
             async for record in records:
                 yield cast(Record[T], record)

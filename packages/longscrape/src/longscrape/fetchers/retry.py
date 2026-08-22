@@ -32,16 +32,16 @@ class RetryingFetcher:
         self._max_retries = max_retries
 
     async def fetch(
-        self, job: Job, context: PipelineContext | None = None
+        self, fetch_input, context: PipelineContext
     ) -> Document:
         for attempt in range(self._max_retries + 1):
             try:
                 # Do not expose a partial attempt: a subsequent retry restarts
                 # the wrapped fetcher and would otherwise duplicate documents
                 # already consumed by downstream stages.
-                return await self._fetcher.fetch(job, context)
+                return await self._fetcher.fetch(fetch_input, context)
             except Exception as error:
-                failure = PipelineFailure(PipelineStage.FETCH, job, error, context)
+                failure = PipelineFailure(PipelineStage.FETCH, context.job, error, context)
                 recovery = (
                     await self._policy.decide(failure)
                     if self._policy is not None

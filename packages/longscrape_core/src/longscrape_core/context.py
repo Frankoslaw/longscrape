@@ -29,6 +29,7 @@ class PipelineContext:
     persisted by a queue backend.
     """
 
+    job: Job
     submitter: JobSubmitter | None = None
     worker_id: str | None = None
     _values: dict[ContextKey[object], object] = field(default_factory=dict)

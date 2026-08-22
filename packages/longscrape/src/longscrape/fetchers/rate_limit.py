@@ -4,20 +4,20 @@ from longscrape_core import (
     Document,
     Fetcher,
     InputUrl,
-    Job,
+    FetchInput,
     PipelineContext,
 )
 
 from longscrape.runtime.rate_limit import RateLimiter
 
 
-def _url_key(job: Job) -> str:
-    if not isinstance(job.input, InputUrl):
+def _url_key(fetch_input: FetchInput) -> str:
+    if not isinstance(fetch_input, InputUrl):
         raise TypeError(
             "RateLimitedFetcher requires an InputUrl input unless "
             "rate_limit_key is provided"
         )
-    return job.input.url
+    return fetch_input.url
 
 
 class RateLimitedFetcher:
@@ -33,7 +33,7 @@ class RateLimitedFetcher:
         self._rate_limit_key = rate_limit_key
 
     async def fetch(
-        self, job: Job, context: PipelineContext | None = None
+        self, fetch_input, context: PipelineContext
     ) -> Document:
-        await self._rate_limiter.acquire(self._rate_limit_key(job))
-        return await self._fetcher.fetch(job, context)
+        await self._rate_limiter.acquire(self._rate_limit_key(fetch_input))
+        return await self._fetcher.fetch(fetch_input, context)

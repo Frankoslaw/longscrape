@@ -55,22 +55,22 @@ class HandoffFetcher:
         self._max_recoveries = max_recoveries
 
     async def fetch(
-        self, job: Job, context: PipelineContext | None = None
+        self, fetch_input, context: PipelineContext
     ) -> Document:
         for attempt in range(self._max_recoveries + 1):
             detected = False
             try:
                 # As with ordinary retries, defer output until the attempt has
                 # completed so a recovery cannot replay partial output.
-                document = await self._fetcher.fetch(job, context)
+                document = await self._fetcher.fetch(fetch_input, context)
                 if self._detector is not None:
-                    error = self._detector(document, job)
+                    error = self._detector(document, context.job)
                     if error is not None:
                         detected = True
                         raise error
                 return document
             except Exception as error:
-                failure = PipelineFailure(PipelineStage.FETCH, job, error, context)
+                failure = PipelineFailure(PipelineStage.FETCH, context.job, error, context)
                 recovery = (
                     await self._policy.decide(failure)
                     if self._policy is not None
