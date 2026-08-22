@@ -1,12 +1,11 @@
-from collections.abc import AsyncIterable
+from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import timedelta
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from longscrape_core.context import JobSubmitter, PipelineContext
 from longscrape_core.failures import PipelineFailure, Recovery
 from longscrape_core.models import (
-    CollisionPolicy,
     Document,
     DocumentRef,
     Job,
@@ -37,17 +36,15 @@ class JobQueue(JobSubmitter, Protocol):
 
 
 class Fetcher(Protocol):
-    def fetch(
-        self, job: Job, context: PipelineContext | None = None
-    ) -> AsyncIterable[Document]: ...
+    async def fetch(self, job: Job, context: PipelineContext) -> Document: ...
 
 
 class Extractor[Out](Protocol):
     def extract(
         self,
-        documents: AsyncIterable[Document],
+        document: Document,
         job: Job,
-        context: PipelineContext | None = None,
+        context: PipelineContext,
     ) -> AsyncIterable[Record[Out]]: ...
 
 
@@ -56,7 +53,7 @@ class Transformer[In, Out](Protocol):
         self,
         records: AsyncIterable[Record[In]],
         job: Job,
-        context: PipelineContext | None = None,
+        context: PipelineContext,
     ) -> AsyncIterable[Record[Out]]: ...
 
 
@@ -67,7 +64,7 @@ class Sink[Out](Protocol):
         self,
         records: AsyncIterable[Record[Out]],
         job: Job,
-        context: PipelineContext | None = None,
+        context: PipelineContext,
     ) -> None: ...
 
 
@@ -87,58 +84,69 @@ class JobStore(Protocol):
     async def fail(self, job_id: UUID, error: Exception) -> None: ...
 
 
-class DocumentStore(Protocol):
-    """Immutable document revisions addressed by opaque refs and stable keys."""
+class DocumentCache(Protocol):
+    async def get(self, key: str) -> Document | None: ...
+    async def set(self, key: str, document: Document) -> None: ...
+    async def delete(self, key: str) -> None: ...
 
-    async def put(
-        self,
-        document: Document,
-        *,
-        key: str,
-        policy: CollisionPolicy = CollisionPolicy.NEW,
-    ) -> DocumentRef: ...
+
+class DocumentArchive(Protocol):
+    async def save(self, document: Document, *, key: str) -> DocumentRef: ...
     async def get(self, ref: DocumentRef) -> Document: ...
     async def latest(self, key: str) -> DocumentRef | None: ...
-    def iter_latest(self) -> AsyncIterable[DocumentRef]: ...
+    # TODO: Can this helper for reextraction be implemented in better way?
+    async def iter_latest(self) -> AsyncIterable[DocumentRef]: ...
+    async def prune(self, *, keep_last: int | None = None) -> int: ...
+
+
+class RecordMerger(Protocol):
+    """Combine the current keyed record with an incoming record."""
+
+    def merge(self, existing: Record[Any], incoming: Record[Any]) -> Record[Any]: ...
 
 
 class RecordStore(Protocol):
-    """Records addressed by opaque refs and replaceable stable keys."""
-
-    async def put(
-        self,
-        record: Record[Any],
-        *,
-        key: str | None = None,
-        policy: CollisionPolicy = CollisionPolicy.NEW,
-    ) -> RecordRef: ...
-    async def get(self, ref: RecordRef) -> Record[Any]: ...
+    async def add(self, record: Record) -> RecordRef: ...
+    async def get(self, ref: RecordRef) -> Record: ...
     async def latest(self, key: str) -> RecordRef | None: ...
+
+    async def create(self, key: str, record: Record) -> RecordRef: ...
+    async def replace(self, key: str, record: Record) -> RecordRef: ...
+    async def merge(
+        self, key: str, record: Record, *, with_: RecordMerger
+    ) -> RecordRef: ...
+
+
+type RecordWriter[In] = Callable[[RecordStore, Record[In], Job], Awaitable[RecordRef]]
+
+
+async def _add_record(store: RecordStore, record: Record[Any], _job: Job) -> RecordRef:
+    return await store.add(record)
 
 
 # TODO: In future consider buffered sink to support batched writes instead of spamming
 # the database with small records
 class RecordSink[In](Sink[In]):
+    """Persist records through an explicit write strategy.
+
+    The default strategy appends each record.  Supply ``write`` when a sink
+    should create, replace, or merge records under an application-defined key.
+    """
+
     def __init__(
         self,
         store: RecordStore,
         *,
-        key: Callable[[Record[In], Job], str] | None = None,
-        policy: CollisionPolicy = CollisionPolicy.NEW,
+        write: RecordWriter[In] | None = None,
     ) -> None:
         self._store = store
-        self._key = key
-        self._policy = policy
+        self._write = write or _add_record
 
     async def sink(
         self,
         records: AsyncIterable[Record[In]],
         job: Job,
-        context: PipelineContext | None = None,
+        context: PipelineContext,
     ) -> None:
         async for record in records:
-            await self._store.put(
-                record,
-                key=self._key(record, job) if self._key is not None else None,
-                policy=self._policy,
-            )
+            await self._write(self._store, record, job)
