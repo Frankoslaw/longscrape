@@ -2,15 +2,22 @@ from __future__ import annotations
 
 import hashlib
 import json
-import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from types import MappingProxyType
 from typing import Self, cast
+from uuid import UUID, uuid4
 
-from longscrape_core._json import FrozenJsonValue, JsonValue, _freeze_json, _thaw_json
+from longscrape_core._json import (
+    FrozenJsonObject,
+    JsonInput,
+    JsonObject,
+    JsonValue,
+    freeze_json_object,
+    thaw_json_object,
+)
 
 
 @dataclass(frozen=True)
@@ -20,21 +27,15 @@ class InputUrl:
 
 @dataclass(frozen=True)
 class InputQuery:
-    query: Mapping[str, FrozenJsonValue]
+    query: Mapping[str, JsonInput]
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "query",
-            MappingProxyType(
-                {key: _freeze_json(value) for key, value in self.query.items()}
-            ),
-        )
+        object.__setattr__(self, "query", freeze_json_object(self.query))
 
 
 @dataclass(frozen=True)
 class DocumentRef:
-    """Opaque capability for one immutable document revision."""
+    """Opaque reference to a document retained by an archive."""
 
     store: str
     value: str
@@ -42,30 +43,15 @@ class DocumentRef:
 
 @dataclass(frozen=True)
 class RecordRef:
-    """Opaque capability for one stored record."""
+    """Opaque reference to a stored record."""
 
     store: str
     value: str
 
 
-class CollisionPolicy(Enum):
-    """How a store handles a write when a stable key already exists."""
-
-    NEW = "new"
-    OVERWRITE = "overwrite"
-    MERGE = "merge"
-
-
-class JobStatus(Enum):
-    QUEUED = "queued"
-    RUNNING = "running"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-
-
 @dataclass(frozen=True)
 class DocumentInput:
-    """Durable job input for an exact document revision."""
+    """Job input for a document revision retained by an archive."""
 
     ref: DocumentRef
 
@@ -74,122 +60,160 @@ type JobInput = InputUrl | InputQuery | DocumentInput
 
 
 @dataclass(frozen=True)
-class JobRequest:
-    """A durable request; ``worker_id`` optionally pins execution to one worker."""
+class JobSpec:
+    """Immutable application request for work to be performed."""
 
     kind: str
     input: JobInput
-    metadata: Mapping[str, FrozenJsonValue] = field(default_factory=dict)
-    worker_id: str | None = None
+    metadata: Mapping[str, JsonInput] = field(default_factory=dict)
+    idempotency_key: str | None = None
+    run_at: datetime | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "metadata",
-            MappingProxyType(
-                {key: _freeze_json(value) for key, value in self.metadata.items()}
-            ),
-        )
-        if self.worker_id == "":
-            raise ValueError("worker_id must not be empty")
+        if not self.kind:
+            raise ValueError("job kind must not be empty")
+        if self.idempotency_key == "":
+            raise ValueError("idempotency_key must not be empty")
+        object.__setattr__(self, "metadata", freeze_json_object(self.metadata))
 
 
 @dataclass(frozen=True)
 class Job:
-    """A queued job whose optional ``worker_id`` is enforced by queue backends."""
+    """A durable job identity and its immutable lineage."""
 
-    kind: str
-    input: JobInput
-    metadata: Mapping[str, FrozenJsonValue] = field(default_factory=dict)
-    id: uuid.UUID = field(default_factory=uuid.uuid4)
-    parent_id: uuid.UUID | None = None
-    root_id: uuid.UUID | None = None
-    worker_id: str | None = None
+    spec: JobSpec
+    id: UUID = field(default_factory=uuid4)
+    parent_id: UUID | None = None
+    root_id: UUID | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "metadata",
-            MappingProxyType(
-                {key: _freeze_json(value) for key, value in self.metadata.items()}
-            ),
-        )
         if self.root_id is None:
             object.__setattr__(self, "root_id", self.id)
-        if self.worker_id == "":
-            raise ValueError("worker_id must not be empty")
 
-    @classmethod
-    def spawn_job(cls, request: JobRequest) -> Job:
-        return cls(
-            kind=request.kind,
-            input=request.input,
-            metadata=request.metadata,
-            worker_id=request.worker_id,
-        )
+    @property
+    def kind(self) -> str:
+        return self.spec.kind
 
-    def spawn_child(self, request: JobRequest) -> Job:
-        return type(self)(
-            kind=request.kind,
-            input=request.input,
-            metadata=cast(
-                Mapping[str, FrozenJsonValue],
-                {
-                    **{key: _thaw_json(value) for key, value in self.metadata.items()},
-                    **{
-                        key: _thaw_json(value)
-                        for key, value in request.metadata.items()
-                    },
-                },
-            ),
-            parent_id=self.id,
-            root_id=self.root_id,
-            worker_id=request.worker_id or self.worker_id,
-        )
+    @property
+    def input(self) -> JobInput:
+        return self.spec.input
 
-    def to_dict(self) -> dict[str, JsonValue]:
-        """Return the small JSON payload sent through a durable job queue."""
+    @property
+    def metadata(self) -> FrozenJsonObject:
+        return cast(FrozenJsonObject, self.spec.metadata)
+
+    def to_dict(self) -> JsonObject:
+        """Return the JSON payload used by durable work implementations."""
 
         return {
             "id": str(self.id),
             "parent_id": str(self.parent_id) if self.parent_id else None,
             "root_id": str(self.root_id),
-            "kind": self.kind,
-            "input": _input_to_dict(self.input),
-            "metadata": {key: _thaw_json(item) for key, item in self.metadata.items()},
-            "worker_id": self.worker_id,
+            "created_at": self.created_at.isoformat(),
+            "spec": {
+                "kind": self.spec.kind,
+                "input": _input_to_dict(self.spec.input),
+                "metadata": thaw_json_object(
+                    cast(FrozenJsonObject, self.spec.metadata)
+                ),
+                "idempotency_key": self.spec.idempotency_key,
+                "run_at": self.spec.run_at.isoformat() if self.spec.run_at else None,
+            },
         }
 
     @classmethod
     def from_dict(cls, value: Mapping[str, JsonValue]) -> Self:
-        parent_id = cast(str | None, value["parent_id"])
+        spec_value = cast(Mapping[str, JsonValue], value["spec"])
+        run_at = cast(str | None, spec_value.get("run_at"))
+        parent_id = cast(str | None, value.get("parent_id"))
         return cls(
-            id=uuid.UUID(cast(str, value["id"])),
-            parent_id=uuid.UUID(parent_id) if parent_id else None,
-            root_id=uuid.UUID(cast(str, value["root_id"])),
-            kind=cast(str, value["kind"]),
-            input=_input_from_dict(cast(dict[str, JsonValue], value["input"])),
-            metadata=cast(Mapping[str, FrozenJsonValue], value["metadata"]),
-            worker_id=cast(str | None, value.get("worker_id")),
+            id=UUID(cast(str, value["id"])),
+            parent_id=UUID(parent_id) if parent_id else None,
+            root_id=UUID(cast(str, value["root_id"])),
+            created_at=datetime.fromisoformat(cast(str, value["created_at"])),
+            spec=JobSpec(
+                kind=cast(str, spec_value["kind"]),
+                input=_input_from_dict(
+                    cast(Mapping[str, JsonValue], spec_value["input"])
+                ),
+                metadata=cast(Mapping[str, JsonInput], spec_value.get("metadata", {})),
+                idempotency_key=cast(str | None, spec_value.get("idempotency_key")),
+                run_at=datetime.fromisoformat(run_at) if run_at else None,
+            ),
         )
 
-    @property
-    def hash(self) -> str:
-        payload = json.dumps(
-            {"kind": self.kind, "input": _input_to_dict(self.input)},
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+class JobState(Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class JobEventType(Enum):
+    ENQUEUED = "enqueued"
+    CLAIMED = "claimed"
+    CHECKPOINTED = "checkpointed"
+    RETRIED = "retried"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 @dataclass(frozen=True)
-class StoredJob:
+class JobView:
+    """Current durable state of a job, suitable for status displays."""
+
     job: Job
-    key: str
-    status: JobStatus
-    attempts: int = 0
+    state: JobState
+    attempt: int = 0
+    progress: float | None = None
+    checkpoint: Mapping[str, JsonInput] | None = None
     error: str | None = None
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        if self.attempt < 0:
+            raise ValueError("attempt must not be negative")
+        if self.progress is not None and not 0 <= self.progress <= 1:
+            raise ValueError("progress must be between zero and one")
+        if self.checkpoint is not None:
+            object.__setattr__(self, "checkpoint", freeze_json_object(self.checkpoint))
+
+
+@dataclass(frozen=True)
+class JobLease:
+    """Exclusive, expiring authority to execute one job attempt."""
+
+    job: Job
+    token: UUID
+    worker_id: str
+    attempt: int
+    expires_at: datetime
+    checkpoint: Mapping[str, JsonInput] | None = None
+
+    def __post_init__(self) -> None:
+        if not self.worker_id:
+            raise ValueError("worker_id must not be empty")
+        if self.attempt < 1:
+            raise ValueError("attempt must be at least one")
+        if self.checkpoint is not None:
+            object.__setattr__(self, "checkpoint", freeze_json_object(self.checkpoint))
+
+
+@dataclass(frozen=True)
+class JobEvent:
+    """An append-only durable job event for audit and dashboard views."""
+
+    job_id: UUID
+    type: JobEventType
+    at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    data: Mapping[str, JsonInput] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "data", freeze_json_object(self.data))
 
 
 @dataclass(frozen=True)
@@ -205,10 +229,6 @@ class Document:
         object.__setattr__(self, "headers", MappingProxyType(dict(self.headers)))
 
 
-# NOTE: T is no longer of type dict[str, JsonValue] as it would make usage with
-# TypedDict awkward but it doesn't mean that it does no longer need to be JSON
-# serializable
-# TODO: enforce in type system or in code this requirment in cleaner manner
 @dataclass(frozen=True)
 class Record[T]:
     kind: str
@@ -239,22 +259,25 @@ def merge_records(
     return Record(existing.kind, data, created_at=incoming.created_at)
 
 
-def _input_to_dict(input: JobInput) -> dict[str, JsonValue]:
+def _input_to_dict(input: JobInput) -> JsonObject:
     match input:
         case InputUrl(url):
             return {"type": "url", "url": url}
         case InputQuery(query):
-            return {"type": "query", "query": _thaw_json(query)}
+            return {
+                "type": "query",
+                "query": thaw_json_object(cast(FrozenJsonObject, query)),
+            }
         case DocumentInput(DocumentRef(store, value)):
             return {"type": "document-ref", "store": store, "ref": value}
 
 
-def _input_from_dict(value: dict[str, JsonValue]) -> JobInput:
+def _input_from_dict(value: Mapping[str, JsonValue]) -> JobInput:
     match value["type"]:
         case "url":
             return InputUrl(cast(str, value["url"]))
         case "query":
-            return InputQuery(cast(Mapping[str, FrozenJsonValue], value["query"]))
+            return InputQuery(cast(Mapping[str, JsonInput], value["query"]))
         case "document-ref":
             return DocumentInput(
                 DocumentRef(cast(str, value["store"]), cast(str, value["ref"]))

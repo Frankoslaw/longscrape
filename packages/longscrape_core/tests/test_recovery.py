@@ -4,6 +4,7 @@ import pytest
 from longscrape_core import (
     InputUrl,
     Job,
+    JobSpec,
     PipelineFailure,
     PipelineStage,
     Recovery,
@@ -19,7 +20,7 @@ def test_recovery_rejects_invalid_delays() -> None:
 
 
 def test_pipeline_failure_preserves_context() -> None:
-    job = Job("article", InputUrl("https://example.com"))
+    job = Job(JobSpec("article", InputUrl("https://example.com")))
     error = ValueError("bad document")
 
     failure = PipelineFailure(PipelineStage.EXTRACT, job, error)

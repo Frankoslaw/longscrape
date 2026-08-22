@@ -1,26 +1,67 @@
+import math
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Mapping, TypeAlias
+from typing import TypeAlias
 
 JsonScalar: TypeAlias = str | int | float | bool | None
 JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
+JsonObject: TypeAlias = dict[str, JsonValue]
+
+type JsonInput = (
+    JsonScalar | list["JsonInput"] | tuple["JsonInput", ...] | Mapping[str, "JsonInput"]
+)
+
 FrozenJsonValue: TypeAlias = (
     JsonScalar | tuple["FrozenJsonValue", ...] | Mapping[str, "FrozenJsonValue"]
 )
+FrozenJsonObject: TypeAlias = Mapping[str, FrozenJsonValue]
 
 
-def _freeze_json(value: JsonValue | FrozenJsonValue) -> FrozenJsonValue:
+def freeze_json(value: JsonInput, *, path: str = "value") -> FrozenJsonValue:
+    """Validate and recursively freeze a JSON-compatible value."""
+
     if isinstance(value, Mapping):
-        return MappingProxyType(
-            {key: _freeze_json(item) for key, item in value.items()}
-        )
+        frozen: dict[str, FrozenJsonValue] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError(f"{path} has a non-string object key: {key!r}")
+            frozen[key] = freeze_json(item, path=f"{path}.{key}")
+        return MappingProxyType(frozen)
     if isinstance(value, (list, tuple)):
-        return tuple(_freeze_json(item) for item in value)
-    return value
+        return tuple(
+            freeze_json(item, path=f"{path}[{index}]")
+            for index, item in enumerate(value)
+        )
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"{path} must not contain a non-finite float")
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    raise TypeError(f"{path} is not JSON-compatible: {type(value).__name__}")
 
 
-def _thaw_json(value: FrozenJsonValue) -> JsonValue:
+def freeze_json_object(
+    value: Mapping[str, JsonInput],
+) -> FrozenJsonObject:
+    """Validate and freeze a JSON object."""
+
+    frozen = freeze_json(dict(value), path="object")
+    assert isinstance(frozen, Mapping)
+    return frozen
+
+
+def thaw_json(value: FrozenJsonValue) -> JsonValue:
+    """Return a mutable JSON-compatible copy of a frozen value."""
+
     if isinstance(value, Mapping):
-        return {key: _thaw_json(item) for key, item in value.items()}
+        return {key: thaw_json(item) for key, item in value.items()}
     if isinstance(value, tuple):
-        return [_thaw_json(item) for item in value]
+        return [thaw_json(item) for item in value]
     return value
+
+
+def thaw_json_object(value: FrozenJsonObject) -> JsonObject:
+    """Return a mutable JSON-compatible copy of a frozen object."""
+
+    thawed = thaw_json(value)
+    assert isinstance(thawed, dict)
+    return thawed

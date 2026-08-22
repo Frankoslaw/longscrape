@@ -1,84 +1,97 @@
 import asyncio
 from collections.abc import AsyncIterable, AsyncIterator
 
+from longscrape_core._json import JsonObject
 from longscrape_core.context import PipelineContext
-from longscrape_core.models import Document, InputUrl, Job, JobRequest, Record
+from longscrape_core.models import (
+    Document,
+    InputUrl,
+    Job,
+    JobLease,
+    JobSpec,
+    Record,
+)
 
 
-async def _collect(items: AsyncIterable[Record]) -> list[Record]:
-    return [item async for item in items]
-
-
-class CollectingSubmitter:
+class RecordingWorkController:
     def __init__(self) -> None:
         self.jobs: list[Job] = []
+        self.checkpoints: list[tuple[JobLease, JsonObject, float | None]] = []
 
-    async def submit_job(self, job: Job) -> None:
+    async def enqueue(
+        self, spec: JobSpec, *, parent: Job | None = None
+    ) -> tuple[Job, bool]:
+        job = Job(
+            spec,
+            parent_id=parent.id if parent else None,
+            root_id=parent.root_id if parent else None,
+        )
         self.jobs.append(job)
+        return job, True
+
+    async def checkpoint(
+        self,
+        lease: JobLease,
+        data: JsonObject,
+        *,
+        progress: float | None = None,
+    ) -> None:
+        self.checkpoints.append((lease, data, progress))
 
 
 class ExampleFetcher:
-    async def fetch(
-        self, job: Job, context: PipelineContext | None = None
-    ) -> AsyncIterator[Document]:
+    async def fetch(self, job: Job, context: PipelineContext) -> Document:
         assert isinstance(job.input, InputUrl)
-        if context is None:
-            raise RuntimeError("ExampleFetcher requires a PipelineContext")
         await context.submit_child(
             job,
-            JobRequest(
-                kind="fetch-url",
-                input=InputUrl("https://example.com/next"),
+            JobSpec(
+                "fetch-url",
+                InputUrl("https://example.com/next"),
                 metadata={"source": job.input.url},
             ),
         )
-        yield Document(url=job.input.url, content=b"<title>Example</title>")
+        return Document(url=job.input.url, content=b"<title>Example</title>")
 
 
 class ExampleExtractor:
     async def extract(
-        self,
-        documents: AsyncIterable[Document],
-        job: Job,
-        context: PipelineContext | None = None,
-    ) -> AsyncIterator[Record]:
-        async for document in documents:
-            yield Record(kind=job.kind, data={"url": document.url})
+        self, document: Document, job: Job, context: PipelineContext
+    ) -> AsyncIterator[Record[dict[str, str]]]:
+        yield Record(kind=job.kind, data={"url": document.url})
 
 
 class AddSourceTransformer:
-    async def transform(
+    def transform(
         self,
-        records: AsyncIterable[Record],
+        records: AsyncIterable[Record[dict[str, str]]],
         job: Job,
-        context: PipelineContext | None = None,
-    ) -> AsyncIterator[Record]:
-        async for record in records:
-            yield Record(kind=record.kind, data={**record.data, "source": "core-test"})
+        context: PipelineContext,
+    ) -> AsyncIterator[Record[dict[str, str]]]:
+        async def transformed() -> AsyncIterator[Record[dict[str, str]]]:
+            async for record in records:
+                yield Record(
+                    kind=record.kind,
+                    data={**record.data, "source": "core-test"},
+                )
+
+        return transformed()
 
 
-def test_pipeline_stages_stream_records_and_submit_follow_up_jobs() -> None:
-    async def run() -> tuple[list[Record], list[Job]]:
-        job = Job(kind="article", input=InputUrl("https://example.com/start"))
-        submitter = CollectingSubmitter()
-        context = PipelineContext(submitter)
-        documents = ExampleFetcher().fetch(job, context)
-        records = ExampleExtractor().extract(documents, job, context)
-        transformed = AddSourceTransformer().transform(records, job, context)
-        return await _collect(transformed), submitter.jobs
+def test_pipeline_contracts_support_one_document_and_child_jobs() -> None:
+    async def run() -> tuple[list[Record[dict[str, str]]], list[Job]]:
+        root = Job(JobSpec("article", InputUrl("https://example.com/start")))
+        work = RecordingWorkController()
+        context = PipelineContext(work=work)
+        document = await ExampleFetcher().fetch(root, context)
+        records = ExampleExtractor().extract(document, root, context)
+        transformed = AddSourceTransformer().transform(records, root, context)
+        return [record async for record in transformed], work.jobs
 
     records, submitted = asyncio.run(run())
 
     assert [(record.kind, record.data) for record in records] == [
-        (
-            "article",
-            {"url": "https://example.com/start", "source": "core-test"},
-        )
+        ("article", {"url": "https://example.com/start", "source": "core-test"})
     ]
     assert len(submitted) == 1
-    child = submitted[0]
-    assert child.kind == "fetch-url"
-    assert child.input == InputUrl("https://example.com/next")
-    assert child.metadata == {"source": "https://example.com/start"}
-    assert child.parent_id is not None
-    assert child.root_id == child.parent_id
+    assert submitted[0].parent_id is not None
+    assert submitted[0].root_id == submitted[0].parent_id

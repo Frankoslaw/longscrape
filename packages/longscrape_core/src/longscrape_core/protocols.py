@@ -1,38 +1,20 @@
 from collections.abc import AsyncIterable, Awaitable, Callable
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID
 
-from longscrape_core.context import JobSubmitter, PipelineContext
+from longscrape_core.context import PipelineContext, WorkController
 from longscrape_core.failures import PipelineFailure, Recovery
 from longscrape_core.models import (
     Document,
     DocumentRef,
     Job,
+    JobEvent,
+    JobLease,
+    JobView,
     Record,
     RecordRef,
-    StoredJob,
 )
-
-
-# Pipeline protocols
-class JobQueue(JobSubmitter, Protocol):
-    """Queue contract with optional worker-affinity delivery.
-
-    ``get(worker_id=...)`` may return unpinned jobs and jobs pinned to that
-    exact ID, but never jobs pinned to another worker. ``get()`` without an ID
-    returns only unpinned jobs.
-    """
-
-    async def submit_job(self, job: Job, *, delay: timedelta | None = None) -> None: ...
-
-    async def get(
-        self, kind: str | None = None, *, worker_id: str | None = None
-    ) -> Job: ...
-
-    def empty(
-        self, kind: str | None = None, *, worker_id: str | None = None
-    ) -> bool: ...
 
 
 class Fetcher(Protocol):
@@ -41,10 +23,7 @@ class Fetcher(Protocol):
 
 class Extractor[Out](Protocol):
     def extract(
-        self,
-        document: Document,
-        job: Job,
-        context: PipelineContext,
+        self, document: Document, job: Job, context: PipelineContext
     ) -> AsyncIterable[Record[Out]]: ...
 
 
@@ -68,20 +47,49 @@ class Sink[Out](Protocol):
     ) -> None: ...
 
 
+class JobExecutor(Protocol):
+    """Execute one claimed job using the supplied process-local context."""
+
+    async def execute(self, job: Job, context: PipelineContext) -> None: ...
+
+
 class RecoveryPolicy(Protocol):
-    """Chooses a recovery recommendation for a failure."""
+    """Choose a recovery recommendation for an execution failure."""
 
     async def decide(self, failure: PipelineFailure) -> Recovery: ...
 
 
-class JobStore(Protocol):
-    """Tracks durable job identity and execution state."""
+class WorkStore(WorkController, Protocol):
+    """Durable work persistence, claiming, progress, and event history."""
 
-    async def register(self, job: Job, *, key: str | None = None) -> bool: ...
-    async def get(self, job_id: UUID) -> StoredJob: ...
-    async def start(self, job_id: UUID) -> None: ...
-    async def succeed(self, job_id: UUID) -> None: ...
-    async def fail(self, job_id: UUID, error: Exception) -> None: ...
+    async def claim(
+        self,
+        *,
+        worker_id: str,
+        lease_for: timedelta,
+        kinds: set[str] | None = None,
+        job_id: UUID | None = None,
+    ) -> JobLease | None: ...
+
+    async def heartbeat(
+        self, lease: JobLease, *, extend_for: timedelta
+    ) -> JobLease: ...
+
+    async def complete(self, lease: JobLease) -> None: ...
+
+    async def retry(
+        self, lease: JobLease, error: Exception, *, run_at: datetime
+    ) -> None: ...
+
+    async def fail(self, lease: JobLease, error: Exception) -> None: ...
+
+    async def cancel(self, job_id: UUID) -> None: ...
+
+    async def recover_expired_leases(self) -> int: ...
+
+    async def get(self, job_id: UUID) -> JobView: ...
+
+    def events(self, job_id: UUID) -> AsyncIterable[JobEvent]: ...
 
 
 class DocumentCache(Protocol):
@@ -94,8 +102,7 @@ class DocumentArchive(Protocol):
     async def save(self, document: Document, *, key: str) -> DocumentRef: ...
     async def get(self, ref: DocumentRef) -> Document: ...
     async def latest(self, key: str) -> DocumentRef | None: ...
-    # TODO: Can this helper for reextraction be implemented in better way?
-    async def iter_latest(self) -> AsyncIterable[DocumentRef]: ...
+    def iter_latest(self) -> AsyncIterable[DocumentRef]: ...
     async def prune(self, *, keep_last: int | None = None) -> int: ...
 
 
@@ -106,14 +113,13 @@ class RecordMerger(Protocol):
 
 
 class RecordStore(Protocol):
-    async def add(self, record: Record) -> RecordRef: ...
-    async def get(self, ref: RecordRef) -> Record: ...
+    async def add(self, record: Record[Any]) -> RecordRef: ...
+    async def get(self, ref: RecordRef) -> Record[Any]: ...
     async def latest(self, key: str) -> RecordRef | None: ...
-
-    async def create(self, key: str, record: Record) -> RecordRef: ...
-    async def replace(self, key: str, record: Record) -> RecordRef: ...
+    async def create(self, key: str, record: Record[Any]) -> RecordRef: ...
+    async def replace(self, key: str, record: Record[Any]) -> RecordRef: ...
     async def merge(
-        self, key: str, record: Record, *, with_: RecordMerger
+        self, key: str, record: Record[Any], *, with_: RecordMerger
     ) -> RecordRef: ...
 
 
@@ -124,20 +130,15 @@ async def _add_record(store: RecordStore, record: Record[Any], _job: Job) -> Rec
     return await store.add(record)
 
 
-# TODO: In future consider buffered sink to support batched writes instead of spamming
-# the database with small records
 class RecordSink[In](Sink[In]):
     """Persist records through an explicit write strategy.
 
-    The default strategy appends each record.  Supply ``write`` when a sink
+    The default strategy appends each record. Supply ``write`` when a sink
     should create, replace, or merge records under an application-defined key.
     """
 
     def __init__(
-        self,
-        store: RecordStore,
-        *,
-        write: RecordWriter[In] | None = None,
+        self, store: RecordStore, *, write: RecordWriter[In] | None = None
     ) -> None:
         self._store = store
         self._write = write or _add_record

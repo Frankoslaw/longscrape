@@ -48,7 +48,7 @@ async def observe_stage(
     items: AsyncIterable[T],
     stage: PipelineStage,
     job: Job,
-    context: PipelineContext | None = None,
+    context: PipelineContext,
     *,
     observers: Iterable[StageObserver] = (),
 ) -> AsyncIterator[T]:
@@ -72,16 +72,31 @@ def observe_fetcher(fetcher: Fetcher, *observers: StageObserver) -> Fetcher:
     """Return a fetcher decorator that emits stage callbacks."""
 
     class ObservedFetcher:
-        def fetch(
-            self, job: Job, context: PipelineContext | None = None
-        ) -> AsyncIterable[Document]:
-            return observe_stage(
-                fetcher.fetch(job, context),
+        async def fetch(self, job: Job, context: PipelineContext) -> Document:
+            observer_list = tuple(observers)
+            await _notify(
+                observer_list,
+                "on_stage_started",
                 PipelineStage.FETCH,
                 job,
                 context,
-                observers=observers,
             )
+            try:
+                document = await fetcher.fetch(job, context)
+            except Exception as error:
+                if isinstance(error, StageExecutionError):
+                    raise
+                failure = PipelineFailure(PipelineStage.FETCH, job, error, context)
+                await _notify(observer_list, "on_stage_failed", failure)
+                raise StageExecutionError(failure) from error
+            await _notify(
+                observer_list,
+                "on_stage_succeeded",
+                PipelineStage.FETCH,
+                job,
+                context,
+            )
+            return document
 
     return ObservedFetcher()
 
@@ -94,12 +109,12 @@ def observe_extractor[Out](
     class ObservedExtractor:
         def extract(
             self,
-            documents: AsyncIterable[Document],
+            document: Document,
             job: Job,
-            context: PipelineContext | None = None,
+            context: PipelineContext,
         ) -> AsyncIterable[Record[Out]]:
             return observe_stage(
-                extractor.extract(documents, job, context),
+                extractor.extract(document, job, context),
                 PipelineStage.EXTRACT,
                 job,
                 context,
@@ -119,7 +134,7 @@ def observe_transformer[In, Out](
             self,
             records: AsyncIterable[Record[In]],
             job: Job,
-            context: PipelineContext | None = None,
+            context: PipelineContext,
         ) -> AsyncIterable[Record[Out]]:
             return observe_stage(
                 transformer.transform(records, job, context),

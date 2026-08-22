@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Generic, Protocol, TypeVar, cast
 
-from longscrape_core.models import Job, JobRequest
+from longscrape_core._json import FrozenJsonObject, JsonObject, thaw_json_object
+from longscrape_core.models import Job, JobLease, JobSpec
 
 T = TypeVar("T")
 _MISSING = object()
@@ -16,30 +17,60 @@ class ContextKey(Generic[T]):
     name: str
 
 
-class JobSubmitter(Protocol):
-    async def submit_job(self, job: Job) -> None: ...
+class WorkController(Protocol):
+    """Work capabilities that a running pipeline may use.
+
+    ``WorkStore`` extends this protocol with claiming, status, and event APIs.
+    Keeping this smaller interface here avoids a context/protocol import cycle.
+    """
+
+    async def enqueue(
+        self, spec: JobSpec, *, parent: Job | None = None
+    ) -> tuple[Job, bool]: ...
+
+    async def checkpoint(
+        self,
+        lease: JobLease,
+        data: JsonObject,
+        *,
+        progress: float | None = None,
+    ) -> None: ...
 
 
 @dataclass
 class PipelineContext:
-    """Mutable, process-local capabilities shared by a pipeline.
+    """Mutable process-local capabilities for one job execution.
 
-    A context is deliberately separate from ``Job``. It may hold live objects
-    such as a browser session or page lease, so it must never be serialized or
-    persisted by a queue backend.
+    The context is never serialized. It can hold live browser objects while
+    exposing a narrow durable-work interface for child jobs and checkpoints.
     """
 
-    submitter: JobSubmitter | None = None
+    work: WorkController | None = None
     worker_id: str | None = None
+    lease: JobLease | None = None
     _values: dict[ContextKey[object], object] = field(default_factory=dict)
 
-    async def submit_child(self, parent: Job, request: JobRequest) -> None:
-        if self.submitter is None:
-            raise RuntimeError("PipelineContext has no job submitter")
-        await self.submitter.submit_job(parent.spawn_child(request))
+    async def submit_child(self, parent: Job, spec: JobSpec) -> Job:
+        if self.work is None:
+            raise RuntimeError("PipelineContext has no work controller")
+        job, _ = await self.work.enqueue(spec, parent=parent)
+        return job
+
+    def load_checkpoint(self) -> JsonObject | None:
+        """Return a mutable copy of this attempt's persisted checkpoint."""
+
+        if self.lease is None or self.lease.checkpoint is None:
+            return None
+        return thaw_json_object(cast(FrozenJsonObject, self.lease.checkpoint))
+
+    async def save_checkpoint(
+        self, data: JsonObject, *, progress: float | None = None
+    ) -> None:
+        if self.work is None or self.lease is None:
+            raise RuntimeError("PipelineContext has no active work lease")
+        await self.work.checkpoint(self.lease, data, progress=progress)
 
     def require_worker_id(self) -> str:
-        """Return the identity of this worker for an affinity-pinned job."""
         if self.worker_id is None:
             raise RuntimeError("PipelineContext has no worker_id")
         return self.worker_id
@@ -52,10 +83,8 @@ class PipelineContext:
 
     def require(self, key: ContextKey[T]) -> T:
         value = self._values.get(cast(ContextKey[object], key), _MISSING)
-
         if value is _MISSING:
             raise LookupError(f"Pipeline context value is missing: {key.name}")
-
         return cast(T, value)
 
     def discard(self, key: ContextKey[T]) -> None:
