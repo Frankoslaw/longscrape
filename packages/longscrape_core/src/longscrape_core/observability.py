@@ -1,30 +1,17 @@
-"""Optional helpers for observing pipeline-stage execution.
-
-These helpers decorate the core pipeline protocols; they do not prescribe a
-runtime, logger, tracer, or retry implementation.
-"""
+"""Attach observation to individual stages without choosing a runtime."""
 
 import logging
 from collections.abc import AsyncIterable, AsyncIterator, Iterable
 from typing import Protocol, TypeVar
 
 from longscrape_core.context import PipelineContext
-from longscrape_core.failures import (
-    PipelineFailure,
-    PipelineStage,
-    StageExecutionError,
-)
 from longscrape_core.models import Document, Job, Record
-from longscrape_core.protocols import Extractor, Fetcher, Transformer
+from longscrape_core.pipeline import Extractor, Fetcher, Sink, Transformer
+from longscrape_core.recovery import PipelineFailure, PipelineStage
 
 
 class StageObserver(Protocol):
-    """An observer with any subset of the optional stage callbacks.
-
-    Observers may implement ``on_stage_started``, ``on_stage_succeeded``,
-    and/or ``on_stage_failed``. The dispatcher discovers each callback at
-    runtime, so this marker protocol deliberately imposes no required method.
-    """
+    """Marker protocol; callbacks are discovered independently at runtime."""
 
 
 T = TypeVar("T")
@@ -52,49 +39,41 @@ async def observe_stage(
     *,
     observers: Iterable[StageObserver] = (),
 ) -> AsyncIterator[T]:
-    """Add lifecycle callbacks and structured failure context to a stage."""
+    """Observe a stream while preserving its original exceptions."""
     observer_list = tuple(observers)
     await _notify(observer_list, "on_stage_started", stage, job, context)
     try:
         async for item in items:
             yield item
     except Exception as error:
-        if isinstance(error, StageExecutionError):
-            raise
-        failure = PipelineFailure(stage, job, error, context)
-        await _notify(observer_list, "on_stage_failed", failure)
-        raise StageExecutionError(failure) from error
+        await _notify(
+            observer_list,
+            "on_stage_failed",
+            PipelineFailure(stage, job, error, context),
+        )
+        raise
     else:
         await _notify(observer_list, "on_stage_succeeded", stage, job, context)
 
 
 def observe_fetcher(fetcher: Fetcher, *observers: StageObserver) -> Fetcher:
-    """Return a fetcher decorator that emits stage callbacks."""
-
     class ObservedFetcher:
         async def fetch(self, job: Job, context: PipelineContext) -> Document:
             observer_list = tuple(observers)
             await _notify(
-                observer_list,
-                "on_stage_started",
-                PipelineStage.FETCH,
-                job,
-                context,
+                observer_list, "on_stage_started", PipelineStage.FETCH, job, context
             )
             try:
                 document = await fetcher.fetch(job, context)
             except Exception as error:
-                if isinstance(error, StageExecutionError):
-                    raise
-                failure = PipelineFailure(PipelineStage.FETCH, job, error, context)
-                await _notify(observer_list, "on_stage_failed", failure)
-                raise StageExecutionError(failure) from error
+                await _notify(
+                    observer_list,
+                    "on_stage_failed",
+                    PipelineFailure(PipelineStage.FETCH, job, error, context),
+                )
+                raise
             await _notify(
-                observer_list,
-                "on_stage_succeeded",
-                PipelineStage.FETCH,
-                job,
-                context,
+                observer_list, "on_stage_succeeded", PipelineStage.FETCH, job, context
             )
             return document
 
@@ -104,14 +83,9 @@ def observe_fetcher(fetcher: Fetcher, *observers: StageObserver) -> Fetcher:
 def observe_extractor[Out](
     extractor: Extractor[Out], *observers: StageObserver
 ) -> Extractor[Out]:
-    """Return an extractor decorator that emits stage callbacks."""
-
     class ObservedExtractor:
         def extract(
-            self,
-            document: Document,
-            job: Job,
-            context: PipelineContext,
+            self, document: Document, job: Job, context: PipelineContext
         ) -> AsyncIterable[Record[Out]]:
             return observe_stage(
                 extractor.extract(document, job, context),
@@ -127,14 +101,9 @@ def observe_extractor[Out](
 def observe_transformer[In, Out](
     transformer: Transformer[In, Out], *observers: StageObserver
 ) -> Transformer[In, Out]:
-    """Return a transformer decorator that emits stage callbacks."""
-
     class ObservedTransformer:
         def transform(
-            self,
-            records: AsyncIterable[Record[In]],
-            job: Job,
-            context: PipelineContext,
+            self, records: AsyncIterable[Record[In]], job: Job, context: PipelineContext
         ) -> AsyncIterable[Record[Out]]:
             return observe_stage(
                 transformer.transform(records, job, context),
@@ -145,3 +114,28 @@ def observe_transformer[In, Out](
             )
 
     return ObservedTransformer()
+
+
+def observe_sink[In](sink: Sink[In], *observers: StageObserver) -> Sink[In]:
+    class ObservedSink:
+        async def sink(
+            self, records: AsyncIterable[Record[In]], job: Job, context: PipelineContext
+        ) -> None:
+            observer_list = tuple(observers)
+            await _notify(
+                observer_list, "on_stage_started", PipelineStage.SINK, job, context
+            )
+            try:
+                await sink.sink(records, job, context)
+            except Exception as error:
+                await _notify(
+                    observer_list,
+                    "on_stage_failed",
+                    PipelineFailure(PipelineStage.SINK, job, error, context),
+                )
+                raise
+            await _notify(
+                observer_list, "on_stage_succeeded", PipelineStage.SINK, job, context
+            )
+
+    return ObservedSink()

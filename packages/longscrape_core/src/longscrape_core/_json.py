@@ -1,3 +1,5 @@
+"""Internal JSON-compatible value types and defensive-copy helpers."""
+
 import math
 from collections.abc import Mapping
 from types import MappingProxyType
@@ -6,11 +8,9 @@ from typing import TypeAlias
 JsonScalar: TypeAlias = str | int | float | bool | None
 JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
 JsonObject: TypeAlias = dict[str, JsonValue]
-
-type JsonInput = (
+JsonInput: TypeAlias = (
     JsonScalar | list["JsonInput"] | tuple["JsonInput", ...] | Mapping[str, "JsonInput"]
 )
-
 FrozenJsonValue: TypeAlias = (
     JsonScalar | tuple["FrozenJsonValue", ...] | Mapping[str, "FrozenJsonValue"]
 )
@@ -19,7 +19,6 @@ FrozenJsonObject: TypeAlias = Mapping[str, FrozenJsonValue]
 
 def freeze_json(value: JsonInput, *, path: str = "value") -> FrozenJsonValue:
     """Validate and recursively freeze a JSON-compatible value."""
-
     if isinstance(value, Mapping):
         frozen: dict[str, FrozenJsonValue] = {}
         for key, item in value.items():
@@ -39,19 +38,13 @@ def freeze_json(value: JsonInput, *, path: str = "value") -> FrozenJsonValue:
     raise TypeError(f"{path} is not JSON-compatible: {type(value).__name__}")
 
 
-def freeze_json_object(
-    value: Mapping[str, JsonInput],
-) -> FrozenJsonObject:
-    """Validate and freeze a JSON object."""
-
+def freeze_json_object(value: Mapping[str, JsonInput]) -> FrozenJsonObject:
     frozen = freeze_json(dict(value), path="object")
     assert isinstance(frozen, Mapping)
     return frozen
 
 
 def thaw_json(value: FrozenJsonValue) -> JsonValue:
-    """Return a mutable JSON-compatible copy of a frozen value."""
-
     if isinstance(value, Mapping):
         return {key: thaw_json(item) for key, item in value.items()}
     if isinstance(value, tuple):
@@ -60,8 +53,6 @@ def thaw_json(value: FrozenJsonValue) -> JsonValue:
 
 
 def thaw_json_object(value: FrozenJsonObject) -> JsonObject:
-    """Return a mutable JSON-compatible copy of a frozen object."""
-
     thawed = thaw_json(value)
     assert isinstance(thawed, dict)
     return thawed
