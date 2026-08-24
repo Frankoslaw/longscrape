@@ -215,23 +215,23 @@ examples below for complete setups.
 
 ## Failures and observability
 
-Pipeline stages ordinarily raise their own errors. Wrap a stage with
-`observe_fetcher`, `observe_extractor`, or `observe_transformer`—or pass
-observers to `Flow`—to receive lifecycle callbacks. Escaped stage errors then
-become `StageExecutionError`, with structured `.failure` and `.error` fields;
-the original exception remains its `__cause__`.
+Pipeline stages ordinarily raise their own errors. Observability is optional
+and lives in `longscrape.observability`, rather than in the stage contracts or
+`Flow`. Its wrappers emit lifecycle events and re-raise the original exception
+unchanged.
 
 ```python
-class ErrorLogger:
-    async def on_stage_failed(self, failure):
-        logger.error("%s: %s", failure.stage.value, failure.error)
+from longscrape.observability import configure, observe_extractor, observe_fetch
 
-flow = Flow(observers=[ErrorLogger()]).fetch(fetcher).extract(extractor).build()
+observer = configure(logging_enabled=True)
+fetcher = observe_fetch(fetcher, observer=observer)
+extractor = observe_extractor(extractor, observer=observer)
+flow = Flow().fetch(fetcher).extract(extractor).build()
 ```
 
-`LoggingObserver` needs only the standard library. `StructlogObserver` and
-`OpenTelemetryObserver` are opt-in adapters and work both with `Flow` and with
-manually composed stages. Configure logging and OpenTelemetry exporters in the
+Stages use ordinary `logging.getLogger()` calls. The observer installs scoped
+metadata for lifecycle events; `StructlogSink` and `OpenTelemetrySink` are
+opt-in adapters. Configure logging and OpenTelemetry exporters in the
 application, not in the library.
 
 `HttpxFetcher` and `BrowserFetcher` raise `HttpStatusError` for unsuccessful

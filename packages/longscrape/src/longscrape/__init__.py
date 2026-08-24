@@ -16,12 +16,7 @@ from longscrape_core import (
     PipelineStage,
     Record,
     StageExecutionError,
-    StageObserver,
     Transformer,
-    observe_extractor,
-    observe_fetcher,
-    observe_stage,
-    observe_transformer,
 )
 
 from longscrape.storage import (
@@ -87,12 +82,7 @@ __all__ = [
     "RecoveryAction",
     "RecoveryPolicy",
     "StageExecutionError",
-    "StageObserver",
     "StoredJob",
     "StoredJobQueue",
     "Transformer",
-    "observe_extractor",
-    "observe_fetcher",
-    "observe_stage",
-    "observe_transformer",
 ]

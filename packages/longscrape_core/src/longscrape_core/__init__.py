@@ -15,13 +15,6 @@ from longscrape_core.models import (
     InputUrl,
     Record,
 )
-from longscrape_core.observability import (
-    StageObserver,
-    observe_extractor,
-    observe_fetcher,
-    observe_stage,
-    observe_transformer,
-)
 from longscrape_core.protocols import Extractor, Fetcher, Transformer
 
 __all__ = [
@@ -40,10 +33,5 @@ __all__ = [
     "PipelineStage",
     "Record",
     "StageExecutionError",
-    "StageObserver",
     "Transformer",
-    "observe_extractor",
-    "observe_fetcher",
-    "observe_stage",
-    "observe_transformer",
 ]
