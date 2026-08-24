@@ -1,15 +1,11 @@
 import asyncio
 import sys
 
-from longscrape import InputUrl, JobRequest, PipelineContext, RecordSink
+from longscrape import InputUrl, JobRequest, RecordSink
 from longscrape.fetchers import FetcherBuilder
-from longscrape.runtime import (
-    Flow,
-    FlowRouter,
-    InMemoryJobQueue,
-    StoredJobQueue,
-)
-from longscrape.stores import InMemoryDocumentStore
+from longscrape.runtime import Flow
+from longscrape.storage import InMemoryDocumentStore
+from longscrape.worker import FlowRouter, InMemoryJobQueue, StoredJobQueue
 
 from .common import close_store, get_document_store, get_job_store, get_record_store
 from .quotes import AUTHOR, QUOTES, START_URL, AuthorExtractor, QuotesExtractor
@@ -28,7 +24,6 @@ async def main() -> None:
 
     job_store = get_job_store()
     job_queue = StoredJobQueue(InMemoryJobQueue(), job_store)
-    context = PipelineContext(job_queue)
     await job_queue.submit(JobRequest(QUOTES, InputUrl(START_URL)))
 
     quote_store = get_record_store("quotes")
@@ -39,15 +34,15 @@ async def main() -> None:
 
     fetcher = FetcherBuilder().cache(store, write=False).build()
     flows = {
-        QUOTES: (
-            Flow(context)
+        QUOTES: lambda _: (
+            Flow()
             .fetch(fetcher)
             .extract(QuotesExtractor())
             .transform(quote_sink)
             .build()
         ),
-        AUTHOR: (
-            Flow(context)
+        AUTHOR: lambda _: (
+            Flow()
             .fetch(fetcher)
             .extract(AuthorExtractor())
             .transform(author_sink)

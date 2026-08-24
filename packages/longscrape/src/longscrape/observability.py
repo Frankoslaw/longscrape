@@ -11,9 +11,10 @@ from contextlib import ExitStack
 from contextvars import ContextVar
 from typing import Any
 
-from longscrape_core import Job, PipelineContext, PipelineFailure, PipelineStage
+from longscrape_core import Context, PipelineFailure, PipelineStage
 
 from longscrape.logging import get_logger
+from longscrape.worker import Job
 
 
 def _job_fields(job: Job) -> dict[str, str | None]:
@@ -32,19 +33,19 @@ class LoggingObserver:
     def __init__(self, logger: logging.Logger | None = None) -> None:
         self._logger = logger or get_logger("pipeline")
 
-    async def on_job_started(self, job: Job, context: PipelineContext | None) -> None:
+    async def on_job_started(self, job: Job, context: Context | None) -> None:
         self._logger.info("job started: %s", _job_fields(job))
 
-    async def on_job_succeeded(self, job: Job, context: PipelineContext | None) -> None:
+    async def on_job_succeeded(self, job: Job, context: Context | None) -> None:
         self._logger.info("job succeeded: %s", _job_fields(job))
 
     async def on_stage_started(
-        self, stage: PipelineStage, job: Job, context: PipelineContext | None
+        self, stage: PipelineStage, job: Job, context: Context | None
     ) -> None:
         self._logger.debug("stage started: stage=%s %s", stage.value, _job_fields(job))
 
     async def on_stage_succeeded(
-        self, stage: PipelineStage, job: Job, context: PipelineContext | None
+        self, stage: PipelineStage, job: Job, context: Context | None
     ) -> None:
         self._logger.debug(
             "stage succeeded: stage=%s %s", stage.value, _job_fields(job)
@@ -56,7 +57,7 @@ class LoggingObserver:
             failure.stage.value,
             type(failure.error).__name__,
             failure.error,
-            _job_fields(failure.job),
+            {},
             exc_info=(type(failure.error), failure.error, failure.error.__traceback__),
         )
 
@@ -73,19 +74,19 @@ class StructlogObserver:
             ) from error
         self._logger = logger or structlog.get_logger("longscrape.pipeline")
 
-    async def on_job_started(self, job: Job, context: PipelineContext | None) -> None:
+    async def on_job_started(self, job: Job, context: Context | None) -> None:
         self._logger.info("job_started", **_job_fields(job))
 
-    async def on_job_succeeded(self, job: Job, context: PipelineContext | None) -> None:
+    async def on_job_succeeded(self, job: Job, context: Context | None) -> None:
         self._logger.info("job_succeeded", **_job_fields(job))
 
     async def on_stage_started(
-        self, stage: PipelineStage, job: Job, context: PipelineContext | None
+        self, stage: PipelineStage, job: Job, context: Context | None
     ) -> None:
         self._logger.debug("stage_started", stage=stage.value, **_job_fields(job))
 
     async def on_stage_succeeded(
-        self, stage: PipelineStage, job: Job, context: PipelineContext | None
+        self, stage: PipelineStage, job: Job, context: Context | None
     ) -> None:
         self._logger.debug("stage_succeeded", stage=stage.value, **_job_fields(job))
 
@@ -100,7 +101,6 @@ class StructlogObserver:
                 failure.error,
                 failure.error.__traceback__,
             ),
-            **_job_fields(failure.job),
         )
 
 
@@ -128,7 +128,7 @@ class OpenTelemetryObserver:
             "longscrape_otel_stages", default=[]
         )
 
-    async def on_job_started(self, job: Job, context: PipelineContext | None) -> None:
+    async def on_job_started(self, job: Job, context: Context | None) -> None:
         stack = ExitStack()
         span = stack.enter_context(
             self._tracer.start_as_current_span(f"job {job.kind}")
@@ -143,7 +143,7 @@ class OpenTelemetryObserver:
         self._jobs.set(stack)
         self._stages.set([])
 
-    async def on_job_succeeded(self, job: Job, context: PipelineContext | None) -> None:
+    async def on_job_succeeded(self, job: Job, context: Context | None) -> None:
         stack = self._jobs.get()
         if stack is not None:
             stack.close()
@@ -151,7 +151,7 @@ class OpenTelemetryObserver:
         self._stages.set([])
 
     async def on_stage_started(
-        self, stage: PipelineStage, job: Job, context: PipelineContext | None
+        self, stage: PipelineStage, job: Job, context: Context | None
     ) -> None:
         stack = ExitStack()
         span = stack.enter_context(
@@ -162,7 +162,7 @@ class OpenTelemetryObserver:
         self._stages.set(spans)
 
     async def on_stage_succeeded(
-        self, stage: PipelineStage, job: Job, context: PipelineContext | None
+        self, stage: PipelineStage, job: Job, context: Context | None
     ) -> None:
         spans = self._stages.get()
         if spans:

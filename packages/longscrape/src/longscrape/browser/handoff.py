@@ -25,7 +25,9 @@ class ManualHandoff:
         self._timeout = timeout
 
     async def resolve(self, failure: PipelineFailure) -> None:
-        url = getattr(failure.job.input, "url", None)
+        # Core failures intentionally carry no job.  A worker-level handoff
+        # adapter must attach its requested URL as a context capability.
+        url = None
         if url is None:
             raise TypeError("ManualHandoff requires a URL job input")
         async with self._browser.locked():

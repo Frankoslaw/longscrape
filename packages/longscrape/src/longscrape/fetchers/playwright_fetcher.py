@@ -2,12 +2,11 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
 from longscrape_core import (
+    Context,
     Document,
     Fetcher,
     HttpStatusError,
     InputUrl,
-    Job,
-    PipelineContext,
 )
 
 from longscrape.browser._protocols import BrowserManagerProtocol
@@ -40,26 +39,20 @@ class BrowserFetcher(Fetcher):
         self._page_mode = page_mode
         self._page_metadata_key = page_metadata_key
 
-    async def fetch(
-        self, fetch_input, context: PipelineContext
-    ) -> Document:
+    async def fetch(self, fetch_input, context: Context) -> Document:
         if not isinstance(fetch_input, InputUrl):
             raise TypeError("BrowserFetcher requires a URL input")
 
         if self._page_mode == "reuse":
             if context is None:
-                raise RuntimeError("Reusable browser pages require a PipelineContext")
+                raise RuntimeError("Reusable browser pages require a Context")
             page = context.require(CURRENT_PAGE)
             close_page = False
         elif self._page_mode == "stored":
-            page_id = job.metadata.get(self._page_metadata_key)
-            if not isinstance(page_id, str):
-                raise ValueError(
-                    f"Stored browser pages require string job metadata "
-                    f"{self._page_metadata_key!r}"
-                )
-            page = self._browser.restore_page(page_id)
-            close_page = False
+            raise RuntimeError(
+                "Stored browser pages are worker orchestration; restore the page "
+                "and pass it with CURRENT_PAGE instead"
+            )
         else:
             page = await self._browser.create_page()
             close_page = True

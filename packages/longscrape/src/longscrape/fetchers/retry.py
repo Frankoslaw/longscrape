@@ -3,16 +3,14 @@
 import asyncio
 
 from longscrape_core import (
+    Context,
     Document,
     Fetcher,
-    Job,
-    PipelineContext,
     PipelineFailure,
     PipelineStage,
-    Recovery,
-    RecoveryAction,
-    RecoveryPolicy,
 )
+
+from longscrape.worker import Recovery, RecoveryAction, RecoveryPolicy
 
 
 class RetryingFetcher:
@@ -31,9 +29,7 @@ class RetryingFetcher:
         self._policy = policy
         self._max_retries = max_retries
 
-    async def fetch(
-        self, fetch_input, context: PipelineContext
-    ) -> Document:
+    async def fetch(self, fetch_input, context: Context) -> Document:
         for attempt in range(self._max_retries + 1):
             try:
                 # Do not expose a partial attempt: a subsequent retry restarts
@@ -41,7 +37,7 @@ class RetryingFetcher:
                 # already consumed by downstream stages.
                 return await self._fetcher.fetch(fetch_input, context)
             except Exception as error:
-                failure = PipelineFailure(PipelineStage.FETCH, context.job, error, context)
+                failure = PipelineFailure(PipelineStage.FETCH, error, context)
                 recovery = (
                     await self._policy.decide(failure)
                     if self._policy is not None

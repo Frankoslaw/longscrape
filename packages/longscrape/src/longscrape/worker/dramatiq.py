@@ -24,19 +24,15 @@ except ImportError as error:  # pragma: no cover - depends on an optional extra
         "Dramatiq orchestration requires the 'longscrape[dramatiq]' extra"
     ) from error
 
-from longscrape_core import (
-    Job,
-    JobRequest,
-    JsonValue,
-    PipelineContext,
-    RecoveryAction,
-    RecoveryPolicy,
-)
+from longscrape_core import StageExecutionError
 
-from longscrape.runtime.errors import StageExecutionError
 from longscrape.runtime.flow import RecordFlow
+from longscrape.utils import JsonValue
+from longscrape.worker.context import JobContext
+from longscrape.worker.models import DocumentRefInput, Job, JobRequest
+from longscrape.worker.recovery import RecoveryAction, RecoveryPolicy
 
-type FlowFactory = Callable[[PipelineContext], RecordFlow]
+type FlowFactory = Callable[[JobContext], RecordFlow]
 
 
 @dataclass(frozen=True)
@@ -63,7 +59,7 @@ class _RetryingFlowFactory:
     factory: FlowFactory
     retries: _DramatiqRetries
 
-    def __call__(self, context: PipelineContext) -> RecordFlow:
+    def __call__(self, context: JobContext) -> RecordFlow:
         return self.factory(context)
 
 
@@ -136,14 +132,16 @@ class DramatiqApp:
                         f"job is pinned to worker {job.worker_id!r}, not "
                         f"{self._worker_id!r}"
                     )
-                context = PipelineContext(
-                    job,
-                    DramatiqJobSubmitter(self),
-                    worker_id=self._worker_id,
+                if isinstance(job.input, DocumentRefInput):
+                    raise _TerminalFlowError(
+                        "DocumentRefInput requires a worker adapter"
+                    )
+                context = JobContext(
+                    job, submitter=DramatiqJobSubmitter(self), worker_id=self._worker_id
                 )
                 flow = factory(context)
                 try:
-                    async for _ in flow(job):
+                    async for _ in flow(job.input, context.context):
                         pass
                 except StageExecutionError as error:
                     await self._recover(error, retries)

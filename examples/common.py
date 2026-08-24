@@ -1,7 +1,7 @@
 import os
 
 from longscrape import DocumentStore, JobStore, RecordStore
-from longscrape.stores import (
+from longscrape.storage import (
     InMemoryDocumentStore,
     InMemoryJobStore,
     InMemoryRecordStore,
@@ -10,7 +10,7 @@ from longscrape.stores import (
 
 def get_document_store() -> DocumentStore:
     if mongo_uri := os.getenv("MONGODB_URI"):
-        from longscrape.stores import PyMongoDocumentStore
+        from longscrape.storage import PyMongoDocumentStore
 
         print("Using MongoDB backed document store")
         return PyMongoDocumentStore(mongo_uri)
@@ -21,7 +21,7 @@ def get_document_store() -> DocumentStore:
 
 def get_record_store(kind: str) -> RecordStore:
     if mongo_uri := os.getenv("MONGODB_URI"):
-        from longscrape.stores import PyMongoRecordStore
+        from longscrape.storage import PyMongoRecordStore
 
         print("Using MongoDB backed record store")
         return PyMongoRecordStore(kind, mongo_uri)
@@ -32,7 +32,7 @@ def get_record_store(kind: str) -> RecordStore:
 
 def get_job_store() -> JobStore:
     if mongo_uri := os.getenv("MONGODB_URI"):
-        from longscrape.stores import PyMongoJobStore
+        from longscrape.storage import PyMongoJobStore
 
         print("Using MongoDB backed job store")
         return PyMongoJobStore(mongo_uri)

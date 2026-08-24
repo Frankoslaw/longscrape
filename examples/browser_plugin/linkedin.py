@@ -7,20 +7,18 @@ authorisation and at your own risk.
 """
 
 import json
-from collections.abc import AsyncIterable, AsyncIterator
+from collections.abc import AsyncIterator
 from typing import cast
 from urllib.parse import urljoin
 
 from longscrape import (
     CollisionPolicy,
+    Context,
     Document,
-    DocumentInput,
     Extractor,
-    Job,
-    PipelineContext,
     Record,
 )
-from longscrape.capture import BrowserCapture, BrowserCaptureServer
+from longscrape.browser_capture import BrowserCapture, BrowserCaptureServer
 from parsel import Selector
 
 from ..common import close_store, get_document_store, get_record_store
@@ -47,55 +45,47 @@ def first_text(values: list[str]) -> str:
 class PeopleSearchExtractor(Extractor):
     async def extract(
         self,
-        documents: AsyncIterable[Document],
-        job: Job,
-        context: PipelineContext | None = None,
+        document: Document,
+        context: Context,
     ) -> AsyncIterator[Record]:
-        async for document in documents:
-            page = Selector(text=document.content.decode(errors="replace"))
-            seen: set[str] = set()
-            for link in page.xpath("//a[contains(@href, '/in/')]"):
-                href = link.attrib.get("href")
-                if not href:
-                    continue
-                url = urljoin(document.url, href).split("?", maxsplit=1)[0]
-                if url in seen:
-                    continue
-                seen.add(url)
-                name = first_text(link.xpath(".//text()").getall())
-                if name:
-                    yield Record(kind="person", data={"name": name, "profile_url": url})
+        page = Selector(text=document.content.decode(errors="replace"))
+        seen: set[str] = set()
+        for link in page.xpath("//a[contains(@href, '/in/')]"):
+            href = link.attrib.get("href")
+            if not href:
+                continue
+            url = urljoin(document.url, href).split("?", maxsplit=1)[0]
+            if url in seen:
+                continue
+            seen.add(url)
+            name = first_text(link.xpath(".//text()").getall())
+            if name:
+                yield Record(kind="person", data={"name": name, "profile_url": url})
 
 
 class ProfileExtractor(Extractor):
     async def extract(
         self,
-        documents: AsyncIterable[Document],
-        job: Job,
-        context: PipelineContext | None = None,
+        document: Document,
+        context: Context,
     ) -> AsyncIterator[Record]:
-        async for document in documents:
-            page = Selector(text=document.content.decode(errors="replace"))
-            name = text(page.css("main h1::text, h1::text").getall())
-            if not name:
-                name = page.css(
-                    "meta[property='og:title']::attr(content), title::text"
-                ).get("")
-                name = name.removesuffix(" | LinkedIn").strip()
-            headline = text(page.css("main .text-body-medium::text").getall())
-            if not headline and name:
-                headline = text(
-                    page.xpath(
-                        "//p[normalize-space() = $name][1]"
-                        "/following-sibling::div[1]//text()",
-                        name=name,
-                    ).getall()
-                )
-            yield Record(kind="profile", data={"name": name, "headline": headline})
-
-
-async def one(document: Document) -> AsyncIterator[Document]:
-    yield document
+        page = Selector(text=document.content.decode(errors="replace"))
+        name = text(page.css("main h1::text, h1::text").getall())
+        if not name:
+            name = page.css(
+                "meta[property='og:title']::attr(content), title::text"
+            ).get("")
+            name = name.removesuffix(" | LinkedIn").strip()
+        headline = text(page.css("main .text-body-medium::text").getall())
+        if not headline and name:
+            headline = text(
+                page.xpath(
+                    "//p[normalize-space() = $name][1]"
+                    "/following-sibling::div[1]//text()",
+                    name=name,
+                ).getall()
+            )
+        yield Record(kind="profile", data={"name": name, "headline": headline})
 
 
 async def handle_capture(capture: BrowserCapture) -> AsyncIterator[Record]:
@@ -104,17 +94,12 @@ async def handle_capture(capture: BrowserCapture) -> AsyncIterator[Record]:
         content=capture.content.encode("utf-8"),
         content_type=capture.content_type,
     )
-    ref = await document_store.put(document, key=f"{capture.kind}:{document.url}")
-    job = Job(
-        kind=capture.kind,
-        input=DocumentInput(ref),
-        metadata=capture.context,
-    )
+    await document_store.put(document, key=f"{capture.kind}:{document.url}")
     match capture.kind:
         case "linkedin.people-search":
-            records = PeopleSearchExtractor().extract(one(document), job)
+            records = PeopleSearchExtractor().extract(document, Context())
         case "linkedin.profile":
-            records = ProfileExtractor().extract(one(document), job)
+            records = ProfileExtractor().extract(document, Context())
         case _:
             return
 

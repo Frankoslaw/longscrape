@@ -3,12 +3,12 @@ from email.utils import parsedate_to_datetime
 
 import httpx
 from longscrape_core import (
+    Context,
     Document,
     Fetcher,
+    FetchInput,
     HttpStatusError,
     InputUrl,
-    FetchInput,
-    PipelineContext,
 )
 
 
@@ -16,9 +16,7 @@ class HttpxFetcher(Fetcher):
     def __init__(self, http: httpx.AsyncClient):
         self._http = http
 
-    async def fetch(
-        self, fetch_input: FetchInput, context: PipelineContext
-    ) -> Document:
+    async def fetch(self, fetch_input: FetchInput, context: Context) -> Document:
         if not isinstance(fetch_input, InputUrl):
             raise TypeError("HttpxFetcher requires an InputUrl input")
 

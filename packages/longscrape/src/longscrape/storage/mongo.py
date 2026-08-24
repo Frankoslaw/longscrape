@@ -5,17 +5,17 @@ from longscrape_core import (
     CollisionPolicy,
     Document,
     DocumentRef,
-    Job,
-    JobStatus,
     Record,
     RecordRef,
-    StoredJob,
 )
 from longscrape_core.models import merge_records
-from longscrape_core.protocols import DocumentStore, JobStore, RecordStore
+from longscrape_core.protocols import DocumentStore, RecordStore
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import DuplicateKeyError
+
+from longscrape.worker.models import Job, JobStatus, StoredJob
+from longscrape.worker.protocols import JobStore
 
 
 class PyMongoDocumentStore(DocumentStore):

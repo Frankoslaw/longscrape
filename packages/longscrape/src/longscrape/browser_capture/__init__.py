@@ -2,7 +2,7 @@ from importlib import import_module
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from longscrape.capture.server import BrowserCapture, BrowserCaptureServer
+    from longscrape.browser_capture.server import BrowserCapture, BrowserCaptureServer
 
 __all__ = ["BrowserCapture", "BrowserCaptureServer"]
 

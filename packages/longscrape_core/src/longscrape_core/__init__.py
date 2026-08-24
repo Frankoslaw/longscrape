@@ -1,30 +1,22 @@
-"""Public domain types and pipeline contracts for longscrape."""
+"""Job-agnostic domain values and stage contracts for longscrape."""
 
 from longscrape_core._json import JsonScalar, JsonValue
-from longscrape_core.context import ContextKey, PipelineContext
+from longscrape_core.context import Context, ContextKey
 from longscrape_core.failures import (
     HttpStatusError,
     PipelineFailure,
     PipelineStage,
-    Recovery,
-    RecoveryAction,
     StageExecutionError,
 )
 from longscrape_core.models import (
     CollisionPolicy,
     Document,
-    DocumentInput,
     DocumentRef,
+    FetchInput,
     InputQuery,
     InputUrl,
-    FetchInput,
-    Job,
-    JobInput,
-    JobRequest,
-    JobStatus,
     Record,
     RecordRef,
-    StoredJob,
 )
 from longscrape_core.observability import (
     StageObserver,
@@ -34,41 +26,35 @@ from longscrape_core.observability import (
     observe_transformer,
 )
 from longscrape_core.protocols import (
+    DocumentStore,
     Extractor,
     Fetcher,
-    JobQueue,
-    JobStore,
-    RecoveryPolicy,
+    RecordSink,
+    RecordStore,
     Transformer,
 )
 
 __all__ = [
+    "CollisionPolicy",
+    "Context",
     "ContextKey",
     "Document",
-    "DocumentInput",
     "DocumentRef",
+    "DocumentStore",
     "Extractor",
     "Fetcher",
+    "FetchInput",
     "HttpStatusError",
     "InputQuery",
     "InputUrl",
-    "FetchInput",
-    "Job",
-    "JobInput",
-    "JobQueue",
-    "JobRequest",
-    "JobStatus",
-    "JobStore",
     "JsonScalar",
     "JsonValue",
-    "PipelineContext",
     "PipelineFailure",
     "PipelineStage",
     "Record",
     "RecordRef",
-    "Recovery",
-    "RecoveryAction",
-    "RecoveryPolicy",
+    "RecordSink",
+    "RecordStore",
     "StageExecutionError",
     "StageObserver",
     "Transformer",
@@ -76,6 +62,4 @@ __all__ = [
     "observe_fetcher",
     "observe_stage",
     "observe_transformer",
-    "StoredJob",
-    "CollisionPolicy",
 ]

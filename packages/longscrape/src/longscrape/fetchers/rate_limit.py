@@ -1,14 +1,14 @@
 from collections.abc import Callable
 
 from longscrape_core import (
+    Context,
     Document,
     Fetcher,
-    InputUrl,
     FetchInput,
-    PipelineContext,
+    InputUrl,
 )
 
-from longscrape.runtime.rate_limit import RateLimiter
+from longscrape.worker.rate_limit import RateLimiter
 
 
 def _url_key(fetch_input: FetchInput) -> str:
@@ -26,14 +26,12 @@ class RateLimitedFetcher:
         fetcher: Fetcher,
         rate_limiter: RateLimiter,
         *,
-        rate_limit_key: Callable[[Job], str] = _url_key,
+        rate_limit_key: Callable[[FetchInput], str] = _url_key,
     ) -> None:
         self._fetcher = fetcher
         self._rate_limiter = rate_limiter
         self._rate_limit_key = rate_limit_key
 
-    async def fetch(
-        self, fetch_input, context: PipelineContext
-    ) -> Document:
+    async def fetch(self, fetch_input: FetchInput, context: Context) -> Document:
         await self._rate_limiter.acquire(self._rate_limit_key(fetch_input))
         return await self._fetcher.fetch(fetch_input, context)

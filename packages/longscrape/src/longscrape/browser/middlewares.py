@@ -7,7 +7,7 @@ from typing import Any, TypedDict, cast
 
 from longscrape.browser._protocols import BrowserMiddleware
 from longscrape.logging import get_logger
-from longscrape.runtime.rate_limit import RateLimiter
+from longscrape.worker.rate_limit import RateLimiter
 
 logger = get_logger(__name__)
 

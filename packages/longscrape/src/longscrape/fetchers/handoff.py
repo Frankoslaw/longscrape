@@ -5,16 +5,14 @@ from collections.abc import Callable
 from typing import Protocol
 
 from longscrape_core import (
+    Context,
     Document,
     Fetcher,
-    Job,
-    PipelineContext,
     PipelineFailure,
     PipelineStage,
-    Recovery,
-    RecoveryAction,
-    RecoveryPolicy,
 )
+
+from longscrape.worker import Recovery, RecoveryAction, RecoveryPolicy
 
 
 class HandoffResolver(Protocol):
@@ -23,7 +21,7 @@ class HandoffResolver(Protocol):
     async def resolve(self, failure: PipelineFailure) -> None: ...
 
 
-type FailureDetector = Callable[[Document, Job], Exception | None]
+type FailureDetector = Callable[[Document], Exception | None]
 
 
 class HandoffFetcher:
@@ -54,9 +52,7 @@ class HandoffFetcher:
         self._detector = detector
         self._max_recoveries = max_recoveries
 
-    async def fetch(
-        self, fetch_input, context: PipelineContext
-    ) -> Document:
+    async def fetch(self, fetch_input, context: Context) -> Document:
         for attempt in range(self._max_recoveries + 1):
             detected = False
             try:
@@ -64,13 +60,13 @@ class HandoffFetcher:
                 # completed so a recovery cannot replay partial output.
                 document = await self._fetcher.fetch(fetch_input, context)
                 if self._detector is not None:
-                    error = self._detector(document, context.job)
+                    error = self._detector(document)
                     if error is not None:
                         detected = True
                         raise error
                 return document
             except Exception as error:
-                failure = PipelineFailure(PipelineStage.FETCH, context.job, error, context)
+                failure = PipelineFailure(PipelineStage.FETCH, error, context)
                 recovery = (
                     await self._policy.decide(failure)
                     if self._policy is not None

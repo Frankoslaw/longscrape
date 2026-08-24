@@ -1,12 +1,12 @@
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
-from longscrape_core import CollisionPolicy, Document, Fetcher, Job, PipelineContext
+from longscrape_core import CollisionPolicy, Context, Document, Fetcher, FetchInput
 from longscrape_core.protocols import DocumentStore
 
 
-def _job_key(job: Job) -> str:
-    return job.hash
+def _input_key(fetch_input: FetchInput) -> str:
+    return repr(fetch_input)
 
 
 class CachedFetcher:
@@ -15,7 +15,7 @@ class CachedFetcher:
         fetcher: Fetcher | None,
         store: DocumentStore,
         *,
-        cache_key: Callable[[Job], str] = _job_key,
+        cache_key: Callable[[FetchInput], str] = _input_key,
         read: bool = True,
         write: bool = True,
         max_age: timedelta | None = None,
@@ -29,11 +29,12 @@ class CachedFetcher:
         self._write = write
         self._max_age = max_age
 
-    async def fetch(
-        self, fetch_input, context: PipelineContext
-    ) -> Document:
-        job = context.job
-        ref = await self._store.latest(self._cache_key(job)) if self._read else None
+    async def fetch(self, fetch_input: FetchInput, context: Context) -> Document:
+        ref = (
+            await self._store.latest(self._cache_key(fetch_input))
+            if self._read
+            else None
+        )
         cached = await self._store.get(ref) if ref is not None else None
         if cached is not None and self._is_fresh(cached):
             return cached
@@ -43,7 +44,11 @@ class CachedFetcher:
 
         document = await self._fetcher.fetch(fetch_input, context)
         if self._write:
-            await self._store.put(document, key=self._cache_key(job), policy=CollisionPolicy.OVERWRITE)
+            await self._store.put(
+                document,
+                key=self._cache_key(fetch_input),
+                policy=CollisionPolicy.OVERWRITE,
+            )
         return document
 
     def _is_fresh(self, document: Document) -> bool:

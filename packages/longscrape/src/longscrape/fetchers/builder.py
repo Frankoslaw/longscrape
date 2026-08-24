@@ -1,14 +1,15 @@
 from collections.abc import Callable
 from datetime import timedelta
 
-from longscrape_core import Fetcher, Job, RecoveryPolicy
+from longscrape_core import Fetcher, FetchInput
 from longscrape_core.protocols import DocumentStore
 
 from longscrape.fetchers.cache import CachedFetcher
 from longscrape.fetchers.handoff import FailureDetector, HandoffFetcher, HandoffResolver
 from longscrape.fetchers.rate_limit import RateLimitedFetcher
 from longscrape.fetchers.retry import RetryingFetcher
-from longscrape.runtime.rate_limit import LeakyBucketRateLimiter
+from longscrape.worker import RecoveryPolicy
+from longscrape.worker.rate_limit import LeakyBucketRateLimiter
 
 
 class FetcherBuilder:
@@ -28,7 +29,7 @@ class FetcherBuilder:
         *,
         requests_per_second: float,
         capacity: int = 1,
-        key: Callable[[Job], str] | None = None,
+        key: Callable[[FetchInput], str] | None = None,
     ) -> FetcherBuilder:
         kwargs = {"rate_limit_key": key} if key is not None else {}
         self._fetcher = RateLimitedFetcher(
@@ -42,7 +43,7 @@ class FetcherBuilder:
         self,
         store: DocumentStore,
         *,
-        key: Callable[[Job], str] | None = None,
+        key: Callable[[FetchInput], str] | None = None,
         read: bool = True,
         write: bool = True,
         max_age: timedelta | None = None,

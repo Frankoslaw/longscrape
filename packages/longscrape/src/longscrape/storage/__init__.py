@@ -1,14 +1,14 @@
 from importlib import import_module
 from typing import TYPE_CHECKING
 
-from longscrape.stores.in_memory import (
+from longscrape.storage.in_memory import (
     InMemoryDocumentStore,
     InMemoryJobStore,
     InMemoryRecordStore,
 )
 
 if TYPE_CHECKING:
-    from longscrape.stores.mongo import (
+    from longscrape.storage.mongo import (
         PyMongoDocumentStore,
         PyMongoJobStore,
         PyMongoRecordStore,
