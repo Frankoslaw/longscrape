@@ -2,12 +2,12 @@ from collections.abc import Callable
 from datetime import timedelta
 
 from longscrape_core import Fetcher, FetchInput
-from longscrape_core.protocols import DocumentStore
 
 from longscrape.fetchers.cache import CachedFetcher
 from longscrape.fetchers.handoff import FailureDetector, HandoffFetcher, HandoffResolver
 from longscrape.fetchers.rate_limit import RateLimitedFetcher
 from longscrape.fetchers.retry import RetryingFetcher
+from longscrape.storage import DocumentStore
 from longscrape.worker import RecoveryPolicy
 from longscrape.worker.rate_limit import LeakyBucketRateLimiter
 

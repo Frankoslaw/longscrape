@@ -5,10 +5,9 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
 from types import MappingProxyType
 
-from longscrape_core._json import JsonInput, JsonValue, freeze_json_object
+from longscrape_core._json import JsonInput, freeze_json_object
 
 
 @dataclass(frozen=True)
@@ -25,28 +24,6 @@ class InputQuery:
 
 
 type FetchInput = InputUrl | InputQuery
-
-
-@dataclass(frozen=True)
-class DocumentRef:
-    """Opaque capability for one immutable document revision."""
-
-    store: str
-    value: str
-
-
-@dataclass(frozen=True)
-class RecordRef:
-    """Opaque capability for one stored record."""
-
-    store: str
-    value: str
-
-
-class CollisionPolicy(Enum):
-    NEW = "new"
-    OVERWRITE = "overwrite"
-    MERGE = "merge"
 
 
 @dataclass(frozen=True)
@@ -76,15 +53,3 @@ class Record[T]:
             separators=(",", ":"),
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def merge_records(
-    existing: Record[dict[str, JsonValue]], incoming: Record[dict[str, JsonValue]]
-) -> Record[dict[str, JsonValue]]:
-    if existing.kind != incoming.kind:
-        raise ValueError("cannot merge records with different kinds")
-    data = dict(existing.data)
-    for key, value in incoming.data.items():
-        if data.get(key) is None:
-            data[key] = value
-    return Record(existing.kind, data, created_at=incoming.created_at)

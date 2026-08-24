@@ -1,8 +1,9 @@
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
-from longscrape_core import CollisionPolicy, Context, Document, Fetcher, FetchInput
-from longscrape_core.protocols import DocumentStore
+from longscrape_core import Context, Document, Fetcher, FetchInput
+
+from longscrape.storage import CollisionPolicy, DocumentStore
 
 
 def _input_key(fetch_input: FetchInput) -> str:

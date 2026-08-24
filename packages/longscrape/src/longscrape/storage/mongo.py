@@ -1,19 +1,18 @@
 from uuid import UUID
 
 from bson import ObjectId
-from longscrape_core import (
-    CollisionPolicy,
-    Document,
-    DocumentRef,
-    Record,
-    RecordRef,
-)
-from longscrape_core.models import merge_records
-from longscrape_core.protocols import DocumentStore, RecordStore
+from longscrape_core import Document, Record
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import DuplicateKeyError
 
+from longscrape.storage.models import (
+    CollisionPolicy,
+    DocumentRef,
+    RecordRef,
+    merge_records,
+)
+from longscrape.storage.protocols import DocumentStore, RecordStore
 from longscrape.worker.models import Job, JobStatus, StoredJob
 from longscrape.worker.protocols import JobStore
 

@@ -8,8 +8,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Self, cast
 
-from longscrape_core import DocumentRef, FetchInput, InputQuery, InputUrl
+from longscrape_core import FetchInput, InputQuery, InputUrl
 
+from longscrape.storage.models import DocumentRef
 from longscrape.utils import (
     FrozenJsonValue,
     JsonInput,

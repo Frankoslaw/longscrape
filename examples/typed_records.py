@@ -10,11 +10,10 @@ from longscrape import (
     Extractor,
     InputUrl,
     Record,
-    RecordSink,
     Transformer,
 )
 from longscrape.runtime import Flow
-from longscrape.storage import InMemoryRecordStore
+from longscrape.storage import InMemoryRecordStore, RecordSink
 
 
 class Article(TypedDict):

@@ -1,12 +1,9 @@
 """Scraping stages plus optional worker orchestration."""
 
 from longscrape_core import (
-    CollisionPolicy,
     Context,
     ContextKey,
     Document,
-    DocumentRef,
-    DocumentStore,
     Extractor,
     Fetcher,
     FetchInput,
@@ -18,9 +15,6 @@ from longscrape_core import (
     PipelineFailure,
     PipelineStage,
     Record,
-    RecordRef,
-    RecordSink,
-    RecordStore,
     StageExecutionError,
     StageObserver,
     Transformer,
@@ -30,6 +24,14 @@ from longscrape_core import (
     observe_transformer,
 )
 
+from longscrape.storage import (
+    CollisionPolicy,
+    DocumentRef,
+    DocumentStore,
+    RecordRef,
+    RecordSink,
+    RecordStore,
+)
 from longscrape.worker import (
     DocumentRefInput,
     FlowRouter,

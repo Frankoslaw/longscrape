@@ -9,14 +9,11 @@ from longscrape_core.failures import (
     StageExecutionError,
 )
 from longscrape_core.models import (
-    CollisionPolicy,
     Document,
-    DocumentRef,
     FetchInput,
     InputQuery,
     InputUrl,
     Record,
-    RecordRef,
 )
 from longscrape_core.observability import (
     StageObserver,
@@ -25,22 +22,12 @@ from longscrape_core.observability import (
     observe_stage,
     observe_transformer,
 )
-from longscrape_core.protocols import (
-    DocumentStore,
-    Extractor,
-    Fetcher,
-    RecordSink,
-    RecordStore,
-    Transformer,
-)
+from longscrape_core.protocols import Extractor, Fetcher, Transformer
 
 __all__ = [
-    "CollisionPolicy",
     "Context",
     "ContextKey",
     "Document",
-    "DocumentRef",
-    "DocumentStore",
     "Extractor",
     "Fetcher",
     "FetchInput",
@@ -52,9 +39,6 @@ __all__ = [
     "PipelineFailure",
     "PipelineStage",
     "Record",
-    "RecordRef",
-    "RecordSink",
-    "RecordStore",
     "StageExecutionError",
     "StageObserver",
     "Transformer",

@@ -1,10 +1,12 @@
 import os
 
-from longscrape import DocumentStore, JobStore, RecordStore
+from longscrape import JobStore
 from longscrape.storage import (
+    DocumentStore,
     InMemoryDocumentStore,
     InMemoryJobStore,
     InMemoryRecordStore,
+    RecordStore,
 )
 
 

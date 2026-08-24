@@ -1,10 +1,10 @@
 import asyncio
 import sys
 
-from longscrape import InputUrl, JobRequest, RecordSink
+from longscrape import InputUrl, JobRequest
 from longscrape.fetchers import FetcherBuilder
 from longscrape.runtime import Flow
-from longscrape.storage import InMemoryDocumentStore
+from longscrape.storage import InMemoryDocumentStore, RecordSink
 from longscrape.worker import FlowRouter, InMemoryJobQueue, StoredJobQueue
 
 from .common import close_store, get_document_store, get_job_store, get_record_store
@@ -34,10 +34,10 @@ async def main() -> None:
 
     fetcher = FetcherBuilder().cache(store, write=False).build()
     flows = {
-        QUOTES: lambda _: (
+        QUOTES: lambda context: (
             Flow()
             .fetch(fetcher)
-            .extract(QuotesExtractor())
+            .extract(QuotesExtractor(context.submit_child))
             .transform(quote_sink)
             .build()
         ),

@@ -12,13 +12,13 @@ from typing import cast
 from urllib.parse import urljoin
 
 from longscrape import (
-    CollisionPolicy,
     Context,
     Document,
     Extractor,
     Record,
 )
 from longscrape.browser_capture import BrowserCapture, BrowserCaptureServer
+from longscrape.storage import CollisionPolicy
 from parsel import Selector
 
 from ..common import close_store, get_document_store, get_record_store
