@@ -12,7 +12,7 @@ framework.
 
 ```text
 Job → Fetcher → Document → Extractor → Record → Transformer
-                    └──────────────→ JobRequest (follow-up work)
+                    └──────────────→ JobSpec (follow-up work)
 ```
 
 `longscrape-core` contains the immutable domain values and lightweight stage
@@ -53,15 +53,15 @@ the extractor produces it, without buffering a whole crawl.
 ```python
 import httpx
 
-from longscrape import InputUrl, Job, JobRequest
+from longscrape import InputUrl, Job, JobSpec
 from longscrape.fetchers import HttpxFetcher
 from longscrape.runtime import Flow
 
 async with httpx.AsyncClient() as client:
-    flow = Flow().fetch(HttpxFetcher(client)).extract(ArticleExtractor()).build()
-    job = Job.spawn_job(JobRequest("article", InputUrl("https://example.com")))
-    async for record in flow(job):
-        print(record.data)
+  flow = Flow().fetch(HttpxFetcher(client)).extract(ArticleExtractor()).build()
+  job = Job.spawn_job(JobSpec("article", InputUrl("https://example.com")))
+  async for record in flow(job):
+    print(record.data)
 ```
 
 `Fetcher`, `Extractor`, and `Transformer` are protocols, so ordinary classes
@@ -107,9 +107,9 @@ context = PipelineContext(submitter)
 flow = Flow(context).fetch(fetcher).extract(extractor).transform(sink).build()
 ```
 
-`JobRequest` is the input for root or child work; `Job.spawn_job(request)`
+`JobSpec` is the input for root or child work; `Job.spawn_job(request)`
 creates a root job. Inside an extractor, use
-`await context.submit_child(job, JobRequest(...))` to preserve the parent and
+`await context.submit_child(job, JobSpec(...))` to preserve the parent and
 root lineage.
 
 ## Fetcher composition
@@ -156,12 +156,12 @@ simple way to drain a finite set of jobs. Wrap the queue in `StoredJobQueue`
 with a `JobStore` to register accepted work and track its state:
 
 ```python
-from longscrape import InputUrl, JobRequest, PipelineContext
+from longscrape import InputUrl, JobSpec, PipelineContext
 from longscrape.runtime import Flow, FlowRouter, InMemoryJobQueue, StoredJobQueue
 
 queue = StoredJobQueue(InMemoryJobQueue(), job_store)
 context = PipelineContext(queue)
-await queue.submit(JobRequest("article", InputUrl("https://example.com")))
+await queue.submit(JobSpec("article", InputUrl("https://example.com")))
 await FlowRouter({"article": Flow(context).fetch(fetcher).extract(extractor).build()}).run(queue)
 ```
 
@@ -175,18 +175,20 @@ module import time. `PipelineContext` is supplied by the adapter, so child-job
 submission automatically targets the broker.
 
 ```python
-from longscrape import InputUrl, JobRequest
+from longscrape import InputUrl, JobSpec
 from longscrape.orchestration import DramatiqApp, dramatiq_retries
 from longscrape.runtime import Flow
 
 app = DramatiqApp.redis(url="redis://localhost:6379/0")
 
+
 @app.flow(kind="article", queue="scrape")
 @dramatiq_retries(policy=policy, max_retries=3)
 def article(context):
-    return Flow(context).fetch(fetcher).extract(extractor).transform(sink).build()
+  return Flow(context).fetch(fetcher).extract(extractor).transform(sink).build()
 
-await app.submit(JobRequest("article", InputUrl("https://example.com")))
+
+await app.submit(JobSpec("article", InputUrl("https://example.com")))
 ```
 
 Run the worker with `dramatiq your_module`. `RecoveryPolicy` decides whether a

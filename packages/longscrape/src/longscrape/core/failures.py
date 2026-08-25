@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from enum import Enum
 
-from longscrape_core.context import Context
+from longscrape.core.context import Context
 
 
 class PipelineStage(Enum):

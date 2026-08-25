@@ -1,16 +1,15 @@
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
-from longscrape_core import (
+from longscrape.browser._protocols import BrowserManagerProtocol
+from longscrape.browser.context import CURRENT_PAGE
+from longscrape.core import (
     Context,
     Document,
     Fetcher,
     HttpStatusError,
     InputUrl,
 )
-
-from longscrape.browser._protocols import BrowserManagerProtocol
-from longscrape.browser.context import CURRENT_PAGE
 
 PageReady = Callable[[Any], Awaitable[None]]
 

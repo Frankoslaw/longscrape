@@ -8,8 +8,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Self, cast
 
-from longscrape_core import FetchInput, InputQuery, InputUrl
-
+from longscrape.core import FetchInput, InputQuery, InputUrl
 from longscrape.storage.models import DocumentRef
 from longscrape.utils import (
     FrozenJsonValue,
@@ -31,7 +30,7 @@ type JobInput = FetchInput | DocumentRefInput
 
 
 @dataclass(frozen=True)
-class JobRequest:
+class JobSpec:
     kind: str
     input: JobInput
     metadata: Mapping[str, JsonInput] = field(default_factory=dict)
@@ -65,12 +64,12 @@ class Job:
         object.__setattr__(self, "metadata", freeze_json_object(self.metadata))
 
     @classmethod
-    def spawn_job(cls, request: JobRequest) -> Self:
+    def spawn_job(cls, request: JobSpec) -> Self:
         return cls(
             request.kind, request.input, request.metadata, worker_id=request.worker_id
         )
 
-    def spawn_child(self, request: JobRequest) -> Self:
+    def spawn_child(self, request: JobSpec) -> Self:
         return type(self)(
             request.kind,
             request.input,

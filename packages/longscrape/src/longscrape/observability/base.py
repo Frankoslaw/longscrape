@@ -12,7 +12,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, TypeVar
 
-from longscrape_core import (
+from longscrape.core import (
     Context,
     Document,
     Extractor,

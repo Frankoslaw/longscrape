@@ -2,9 +2,8 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Protocol
 
-from longscrape_core import Context
-
-from longscrape.worker.models import Job, JobRequest
+from longscrape.core import Context
+from longscrape.worker.models import Job, JobSpec
 
 
 class JobSubmitter(Protocol):
@@ -20,7 +19,7 @@ class JobContext:
     submitter: JobSubmitter | None = None
     worker_id: str | None = None
 
-    async def submit_child(self, request: JobRequest) -> None:
+    async def submit_child(self, request: JobSpec) -> None:
         if self.submitter is None:
             raise RuntimeError("JobContext has no job submitter")
         await self.submitter.submit_job(self.job.spawn_child(request))

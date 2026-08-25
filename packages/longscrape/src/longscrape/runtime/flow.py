@@ -3,7 +3,7 @@
 from collections.abc import AsyncIterable, AsyncIterator, Callable
 from typing import Any, cast
 
-from longscrape_core import (
+from longscrape.core import (
     Context,
     Extractor,
     Fetcher,
@@ -18,7 +18,8 @@ __all__ = ["Flow", "RecordFlow"]
 
 
 class Flow:
-    def fetch(self, fetcher: Fetcher) -> _FetchedFlow:
+    @staticmethod
+    def fetch(fetcher: Fetcher) -> _FetchedFlow:
         return _FetchedFlow(fetcher)
 
 

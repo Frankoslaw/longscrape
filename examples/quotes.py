@@ -3,13 +3,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from urllib.parse import urljoin
 
 import httpx
-from longscrape import (
-    Document,
-    Extractor,
-    InputUrl,
-    JobRequest,
-    Record,
-)
+from longscrape import Context, Document, Extractor, InputUrl, JobSpec, Record
 from longscrape.fetchers import FetcherBuilder, HttpxFetcher
 from longscrape.runtime import Flow
 from longscrape.storage import RecordSink
@@ -24,10 +18,10 @@ START_URL = "https://quotes.toscrape.com/page/1/"
 
 
 class QuotesExtractor(Extractor):
-    def __init__(self, submit_child: Callable[[JobRequest], Awaitable[None]]) -> None:
+    def __init__(self, submit_child: Callable[[JobSpec], Awaitable[None]]) -> None:
         self._submit_child = submit_child
 
-    async def extract(self, document: Document, _) -> AsyncIterator[Record]:
+    async def extract(self, document: Document, ctx: Context) -> AsyncIterator[Record]:
         page = Selector(text=document.content.decode(errors="replace"))
         for quote in page.css(".quote"):
             yield Record(
@@ -39,19 +33,19 @@ class QuotesExtractor(Extractor):
             )
         for href in page.css(".quote a[href*='/author/']::attr(href)").getall():
             await self._submit_child(
-                JobRequest(
+                JobSpec(
                     AUTHOR,
                     InputUrl(urljoin(document.url, href.rstrip("/") + "/")),
                 ),
             )
         if href := page.css(".pager .next a::attr(href)").get():
             await self._submit_child(
-                JobRequest(QUOTES, InputUrl(urljoin(document.url, href)))
+                JobSpec(QUOTES, InputUrl(urljoin(document.url, href)))
             )
 
 
 class AuthorExtractor(Extractor):
-    async def extract(self, document: Document, _) -> AsyncIterator[Record]:
+    async def extract(self, document: Document, ctx: Context) -> AsyncIterator[Record]:
         page = Selector(text=document.content.decode(errors="replace"))
         yield Record(
             kind="author",
@@ -68,7 +62,7 @@ class AuthorExtractor(Extractor):
 async def main() -> None:
     job_store = get_job_store()
     job_queue = StoredJobQueue(InMemoryJobQueue(), job_store)
-    await job_queue.submit(JobRequest(QUOTES, InputUrl(START_URL)))
+    await job_queue.submit(JobSpec(QUOTES, InputUrl(START_URL)))
 
     quote_store = get_record_store("quotes")
     author_store = get_record_store("authors")

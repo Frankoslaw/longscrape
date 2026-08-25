@@ -1,21 +1,21 @@
 """Job-agnostic domain values and stage contracts for longscrape."""
 
-from longscrape_core._json import JsonScalar, JsonValue
-from longscrape_core.context import Context, ContextKey
-from longscrape_core.failures import (
+from longscrape.core.context import Context, ContextKey
+from longscrape.core.failures import (
     HttpStatusError,
     PipelineFailure,
     PipelineStage,
     StageExecutionError,
 )
-from longscrape_core.models import (
+from longscrape.core.models import (
     Document,
     FetchInput,
     InputQuery,
     InputUrl,
     Record,
 )
-from longscrape_core.protocols import Extractor, Fetcher, Transformer
+from longscrape.core.pipeline import Extractor, Fetcher, Transformer
+from longscrape.utils import JsonScalar, JsonValue
 
 __all__ = [
     "Context",

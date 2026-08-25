@@ -1,13 +1,12 @@
 from collections.abc import Callable
 
-from longscrape_core import (
+from longscrape.core import (
     Context,
     Document,
     Fetcher,
     FetchInput,
     InputUrl,
 )
-
 from longscrape.worker.rate_limit import RateLimiter
 
 

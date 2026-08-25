@@ -1,8 +1,7 @@
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
-from longscrape_core import Context, Document, Fetcher, FetchInput
-
+from longscrape.core import Context, Document, Fetcher, FetchInput
 from longscrape.storage import CollisionPolicy, DocumentStore
 
 

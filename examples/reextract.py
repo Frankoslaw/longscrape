@@ -1,7 +1,7 @@
 import asyncio
 import sys
 
-from longscrape import InputUrl, JobRequest
+from longscrape import InputUrl, JobSpec
 from longscrape.fetchers import FetcherBuilder
 from longscrape.runtime import Flow
 from longscrape.storage import InMemoryDocumentStore, RecordSink
@@ -24,7 +24,7 @@ async def main() -> None:
 
     job_store = get_job_store()
     job_queue = StoredJobQueue(InMemoryJobQueue(), job_store)
-    await job_queue.submit(JobRequest(QUOTES, InputUrl(START_URL)))
+    await job_queue.submit(JobSpec(QUOTES, InputUrl(START_URL)))
 
     quote_store = get_record_store("quotes")
     author_store = get_record_store("authors")

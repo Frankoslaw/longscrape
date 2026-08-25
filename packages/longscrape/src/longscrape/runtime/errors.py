@@ -1,3 +1,3 @@
-from longscrape_core import StageExecutionError
+from longscrape.core import StageExecutionError
 
 __all__ = ["StageExecutionError"]

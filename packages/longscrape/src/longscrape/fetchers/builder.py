@@ -1,8 +1,7 @@
 from collections.abc import Callable
 from datetime import timedelta
 
-from longscrape_core import Fetcher, FetchInput
-
+from longscrape.core import Fetcher, FetchInput
 from longscrape.fetchers.cache import CachedFetcher
 from longscrape.fetchers.handoff import FailureDetector, HandoffFetcher, HandoffResolver
 from longscrape.fetchers.rate_limit import RateLimitedFetcher

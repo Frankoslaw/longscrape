@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import MappingProxyType
 
-from longscrape_core._json import JsonInput, freeze_json_object
+from longscrape.utils import JsonInput, freeze_json_object
 
 
 @dataclass(frozen=True)

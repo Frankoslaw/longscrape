@@ -24,12 +24,11 @@ except ImportError as error:  # pragma: no cover - depends on an optional extra
         "Dramatiq orchestration requires the 'longscrape[dramatiq]' extra"
     ) from error
 
-from longscrape_core import StageExecutionError
-
+from longscrape.core import StageExecutionError
 from longscrape.runtime.flow import RecordFlow
 from longscrape.utils import JsonValue
 from longscrape.worker.context import JobContext
-from longscrape.worker.models import DocumentRefInput, Job, JobRequest
+from longscrape.worker.models import DocumentRefInput, Job, JobSpec
 from longscrape.worker.recovery import RecoveryAction, RecoveryPolicy
 
 type FlowFactory = Callable[[JobContext], RecordFlow]
@@ -178,9 +177,9 @@ class DramatiqApp:
         return register
 
     async def submit(
-        self, job: Job | JobRequest, *, delay: timedelta | None = None
+        self, job: Job | JobSpec, *, delay: timedelta | None = None
     ) -> None:
-        if isinstance(job, JobRequest):
+        if isinstance(job, JobSpec):
             job = Job.spawn_job(job)
         try:
             actor = self._actors[job.kind]

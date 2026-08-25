@@ -1,6 +1,6 @@
 """Scraping stages plus optional worker orchestration."""
 
-from longscrape_core import (
+from longscrape.core import (
     Context,
     ContextKey,
     Document,
@@ -18,7 +18,6 @@ from longscrape_core import (
     StageExecutionError,
     Transformer,
 )
-
 from longscrape.storage import (
     CollisionPolicy,
     DocumentRef,
@@ -35,7 +34,7 @@ from longscrape.worker import (
     JobContext,
     JobInput,
     JobQueue,
-    JobRequest,
+    JobSpec,
     JobStatus,
     JobStore,
     JobSubmitter,
@@ -66,7 +65,7 @@ __all__ = [
     "JobContext",
     "JobInput",
     "JobQueue",
-    "JobRequest",
+    "JobSpec",
     "JobStatus",
     "JobStore",
     "JobSubmitter",

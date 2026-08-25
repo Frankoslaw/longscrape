@@ -3,8 +3,9 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from longscrape_core import Record
 from pydantic import BaseModel, Field
+
+from longscrape.core import Record
 
 
 class BrowserCapture(BaseModel):

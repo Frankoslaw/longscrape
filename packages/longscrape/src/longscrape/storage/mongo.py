@@ -1,11 +1,11 @@
 from uuid import UUID
 
 from bson import ObjectId
-from longscrape_core import Document, Record
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import DuplicateKeyError
 
+from longscrape.core import Document, Record
 from longscrape.storage.models import (
     CollisionPolicy,
     DocumentRef,

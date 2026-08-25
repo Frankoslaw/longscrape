@@ -3,8 +3,7 @@ import uuid
 from dataclasses import replace
 from uuid import UUID
 
-from longscrape_core import Document, Record
-
+from longscrape.core import Document, Record
 from longscrape.storage.models import (
     CollisionPolicy,
     DocumentRef,

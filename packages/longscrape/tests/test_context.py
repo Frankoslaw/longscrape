@@ -1,5 +1,5 @@
 import pytest
-from longscrape_core import Context, ContextKey
+from longscrape.core import Context, ContextKey
 
 
 def test_context_keys_are_identity_based_and_typed() -> None:

@@ -1,8 +1,7 @@
 from collections.abc import AsyncIterable
 from typing import Any, Callable, Never, Protocol
 
-from longscrape_core import Context, Document, Record, Transformer
-
+from longscrape.core import Context, Document, Record, Transformer
 from longscrape.storage.models import CollisionPolicy, DocumentRef, RecordRef
 
 

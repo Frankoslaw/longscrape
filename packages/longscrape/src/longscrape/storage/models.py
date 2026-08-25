@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from longscrape_core import JsonValue, Record
+from longscrape.core import JsonValue, Record
 
 
 @dataclass(frozen=True)

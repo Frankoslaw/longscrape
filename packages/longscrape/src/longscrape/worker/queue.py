@@ -3,7 +3,7 @@ from collections import deque
 from collections.abc import Callable
 from datetime import timedelta
 
-from longscrape.worker.models import Job, JobRequest
+from longscrape.worker.models import Job, JobSpec
 from longscrape.worker.protocols import JobQueue, JobStore
 
 
@@ -12,7 +12,7 @@ class InMemoryJobQueue(JobQueue):
         self._jobs: deque[Job] = deque()
         self._not_empty = asyncio.Condition()
 
-    async def submit(self, request: JobRequest) -> None:
+    async def submit(self, request: JobSpec) -> None:
         await self.submit_job(Job.spawn_job(request))
 
     async def submit_job(self, job: Job, *, delay: timedelta | None = None) -> None:
@@ -53,7 +53,7 @@ class StoredJobQueue(JobQueue):
     ) -> None:
         self._queue, self._store, self._key = queue, store, key
 
-    async def submit(self, request: JobRequest) -> None:
+    async def submit(self, request: JobSpec) -> None:
         await self.submit_job(Job.spawn_job(request))
 
     async def submit_job(self, job: Job, *, delay: timedelta | None = None) -> None:

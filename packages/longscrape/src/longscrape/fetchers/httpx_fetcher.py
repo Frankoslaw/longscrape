@@ -2,7 +2,8 @@ from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 
 import httpx
-from longscrape_core import (
+
+from longscrape.core import (
     Context,
     Document,
     Fetcher,

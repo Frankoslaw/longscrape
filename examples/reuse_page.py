@@ -14,7 +14,7 @@ from longscrape import (
     Extractor,
     InputUrl,
     Job,
-    JobRequest,
+    JobSpec,
     PipelineContext,
     Record,
 )
@@ -60,7 +60,7 @@ class QueueSecondScrape(Extractor):
             # Context does not travel with a job.  Pass only the opaque page ID.
             await context.submit_child(
                 job,
-                JobRequest(
+                JobSpec(
                     SECOND_SCRAPE,
                     InputUrl(document.url),
                     metadata={PAGE_ID: job.metadata[PAGE_ID]},
@@ -114,7 +114,7 @@ async def main() -> None:
     )
 
     await queue.submit(
-        JobRequest(FIRST_SCRAPE, InputUrl(URL), metadata={PAGE_ID: page_id})
+        JobSpec(FIRST_SCRAPE, InputUrl(URL), metadata={PAGE_ID: page_id})
     )
     try:
         await FlowRouter(

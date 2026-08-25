@@ -5,7 +5,7 @@ from longscrape.worker.models import (
     DocumentRefInput,
     Job,
     JobInput,
-    JobRequest,
+    JobSpec,
     JobStatus,
     StoredJob,
 )
@@ -22,7 +22,7 @@ __all__ = [
     "JobContext",
     "JobInput",
     "JobQueue",
-    "JobRequest",
+    "JobSpec",
     "JobStatus",
     "JobStore",
     "JobSubmitter",

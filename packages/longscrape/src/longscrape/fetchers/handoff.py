@@ -4,14 +4,13 @@ import asyncio
 from collections.abc import Callable
 from typing import Protocol
 
-from longscrape_core import (
+from longscrape.core import (
     Context,
     Document,
     Fetcher,
     PipelineFailure,
     PipelineStage,
 )
-
 from longscrape.worker import Recovery, RecoveryAction, RecoveryPolicy
 
 

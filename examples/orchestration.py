@@ -16,8 +16,8 @@ import logging
 import os
 from collections.abc import AsyncIterable, AsyncIterator
 
-from longscrape import Document, Extractor, InputUrl, Job, JobRequest, Record
-from longscrape.orchestration import DramatiqApp
+from longscrape import Document, Extractor, InputUrl, Job, JobSpec, Record, Fetcher, Context, FetchInput, Transformer
+from longscrape.worker.dramatiq import DramatiqApp
 from longscrape.runtime import Flow
 
 CATALOG = "catalog"
@@ -27,22 +27,20 @@ SUMMARY = "summary"
 app = DramatiqApp.redis(url=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
 
 
-class FakeFetcher:
-    async def fetch(self, job: Job, context=None) -> AsyncIterator[Document]:
-        if not isinstance(job.input, InputUrl):
-            raise TypeError("example jobs require InputUrl")
-        yield Document(url=job.input.url, content=b"")
+class FakeFetcher(Fetcher):
+    async def fetch(self, fetch_input: FetchInput, ctx=None) -> Document:
+        if not isinstance(fetch_input, InputUrl):
+            raise TypeError("example fetch_input require InputUrl")
+        return Document(url=fetch_input.url, content=b"")
 
 
-class PrintRecords:
-    """A visible sink proving that the worker ran each flow."""
-
+class PrintRecords(Transformer):
     async def transform(
-        self, records: AsyncIterable[Record], job: Job, context=None
+        self, records: AsyncIterable[Record], ctx=None
     ) -> AsyncIterator[Record]:
         async for record in records:
             logging.info(
-                f"{record.kind}: {record.data}; job={job.id}; "
+                f"{record.kind}: {record.data}; job={ctx.j.id}; "
                 f"parent={job.parent_id}; root={job.root_id}",
             )
             yield record
@@ -57,7 +55,7 @@ class CatalogExtractor(Extractor):
         async for document in documents:
             for item in ("alpha", "beta"):
                 await context.submit_child(
-                    job, JobRequest(DETAIL, InputUrl(f"{document.url}/{item}"))
+                    job, JobSpec(DETAIL, InputUrl(f"{document.url}/{item}"))
                 )
             yield Record("catalog", {"url": document.url})
 
@@ -69,7 +67,7 @@ class DetailExtractor(Extractor):
         if context is None:
             raise RuntimeError("DetailExtractor requires a context")
         async for document in documents:
-            await context.submit_child(job, JobRequest(SUMMARY, InputUrl(document.url)))
+            await context.submit_child(job, JobSpec(SUMMARY, InputUrl(document.url)))
             yield Record("detail", {"url": document.url})
 
 
@@ -84,7 +82,7 @@ class SummaryExtractor(Extractor):
 @app.flow(kind=CATALOG, queue="catalog")
 def catalog(context):
     return (
-        Flow(context)
+        Flow()
         .fetch(FakeFetcher())
         .extract(CatalogExtractor())
         .transform(PrintRecords())
@@ -115,7 +113,7 @@ def summary(context):
 
 
 async def main() -> None:
-    await app.submit(JobRequest(CATALOG, InputUrl("https://example.test/catalog")))
+    await app.submit(JobSpec(CATALOG, InputUrl("https://example.test/catalog")))
 
 
 if __name__ == "__main__":

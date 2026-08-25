@@ -3,9 +3,8 @@
 import asyncio
 from datetime import timedelta
 
-from longscrape_core import PipelineFailure
-
 from longscrape.browser.manager import BrowserManager
+from longscrape.core import PipelineFailure
 
 
 class ManualHandoff:
