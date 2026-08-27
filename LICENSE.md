@@ -1,6 +1,6 @@
 The Clear BSD License
 
-Copyright (c) 2026 Franciszek Łopuszański
+Copyright © 2026 Franciszek Łopuszański
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

@@ -2,6 +2,16 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class InputUrl:
+    url: str
+
+
+@dataclass(frozen=True)
+class InputQuery[T]:
+    query: T
+
+
+@dataclass(frozen=True)
 class Document:
     url: str
     content_type: str
