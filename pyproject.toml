@@ -16,12 +16,6 @@ dependencies = [
     "parsel>=1.11.0",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/longscrape"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-
 [dependency-groups]
 dev = [
     "mkdocs>=1.6.1",
@@ -29,5 +23,13 @@ dev = [
     "pyright>=1.1.411",
     "pytest>=9.1.1",
     "pytest-async>=0.1.1",
+    "pytest-watcher>=0.6.3",
     "ruff>=0.16.4",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/longscrape"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
