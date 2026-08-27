@@ -1,25 +1,19 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [project]
-name = "longscrape"
-version = "0.1.0"
+name = "longscrape-workspace"
+version = "0.3.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
     { name = "Franciszek Łopuszański", email = "franopusz2006@gmail.com" }
 ]
 requires-python = ">=3.14"
-dependencies = [
-    "httpx>=0.28.1",
-    "parsel>=1.11.0",
-]
 
 [dependency-groups]
 dev = [
+    "longscrape",
     "mkdocs>=1.6.1",
     "mkdocstrings[python]>=1.0.6",
+    "pre-commit>=4.6.2",
     "pyright>=1.1.411",
     "pytest>=9.1.1",
     "pytest-async>=0.1.1",
@@ -27,9 +21,34 @@ dev = [
     "ruff>=0.16.4",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/longscrape"]
+[tool.uv.workspace]
+members = [
+    "packages/longscrape"
+]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
+[tool.uv.sources]
+longscrape = { workspace = true }
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "strict"
+include = [
+    "packages",
+    "examples",
+    "playbooks",
+]
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/build",
+    "**/dist",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+]
+extend-select = ["I"]

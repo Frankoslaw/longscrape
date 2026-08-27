@@ -9,7 +9,8 @@ class Document:
 
     @property
     def text(self) -> str:
-        return self.content.decode('utf-8')
+        return self.content.decode("utf-8")
+
 
 @dataclass(frozen=True)
 class Record[T]:
